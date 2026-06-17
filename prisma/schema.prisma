@@ -1,0 +1,58 @@
+// CashPilot - Prisma schema
+// Application de revenus passifs via arbitrage P2P
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  phone        String   @unique
+  pinHash      String
+  name         String?
+  level        String   @default("starter") // "starter" | "croissance"
+  balance      Int      @default(0) // solde actuel en XAF (gains + capital disponible)
+  capital      Int      @default(0) // capital total déposé
+  totalGains   Int      @default(0) // cumul de tous les gains
+  totalExchanges Int    @default(0) // nombre d'échanges réalisés
+  status       String   @default("active") // "active" | "paused"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transactions     Transaction[]
+  robotEvents      RobotEvent[]
+}
+
+model Transaction {
+  id            String   @id @default(cuid())
+  userId        String
+  type          String   // "deposit" | "withdraw" | "gain"
+  amount        Int      // montant en XAF (positif pour depot/gain, negatif pour retrait)
+  balanceAfter  Int
+  description   String
+  operator      String?  // "mtn" | "orange" pour depot/retrait
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, type])
+}
+
+model RobotEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  gain        Int      // gain réalisé en XAF
+  market      String   // "binance" | "yellowcard" | "paxful" | "bitget"
+  pair        String   // paire échangée (ex: "USDT/XAF")
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
