@@ -18,6 +18,7 @@ interface UseDashboardReturn {
  */
 export function useDashboard(): UseDashboardReturn {
   const userId = useCashPilotStore((s) => s.userId);
+  const mode = useCashPilotStore((s) => s.mode); // pour détecter les changements de mode
   const triggerGainAnimation = useCashPilotStore((s) => s.triggerGainAnimation);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,8 +35,9 @@ export function useDashboard(): UseDashboardReturn {
         throw new Error(json.error || "Erreur de chargement");
       }
       const newData = json as DashboardData;
-      // Détecter un nouveau gain (balance augmentée)
+      // Détecter un nouveau gain (balance augmentée) seulement en mode managed
       if (
+        newData.user.mode === "managed" &&
         lastBalanceRef.current !== null &&
         newData.user.balance > lastBalanceRef.current
       ) {
@@ -58,6 +60,12 @@ export function useDashboard(): UseDashboardReturn {
     setLoading(true);
     refresh();
   }, [userId, refresh]);
+
+  // Recharger quand le mode change (local cache)
+  useEffect(() => {
+    if (!userId || !mode) return;
+    refresh();
+  }, [mode, userId, refresh]);
 
   // Polling du robot: toutes les 20 secondes, on appelle le tick
   useEffect(() => {

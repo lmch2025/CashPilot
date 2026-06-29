@@ -2,13 +2,16 @@
 
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
-import { ArrowRight, Shield, Zap, HeartHandshake, Sparkles } from "lucide-react";
+import { ArrowRight, Shield, Zap, HeartHandshake, MapPin } from "lucide-react";
 import { CashPilotLogo } from "@/components/cashpilot/logo";
 import { Button } from "@/components/ui/button";
+import { LanguageToggle } from "@/components/i18n/language-toggle";
 import { useCashPilotStore } from "@/lib/store";
 import { formatXAF } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 
 export function WelcomeScreen() {
+  const t = useT();
   const setView = useCashPilotStore((s) => s.setView);
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
@@ -32,14 +35,17 @@ export function WelcomeScreen() {
       >
         <div className="mx-auto max-w-5xl px-4 sm:px-6 h-16 flex items-center justify-between">
           <CashPilotLogo size={40} withText />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setView("onboarding-phone")}
-            className="text-sm font-medium"
-          >
-            Se connecter
-          </Button>
+          <div className="flex items-center gap-2">
+            <LanguageToggle compact />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setView("onboarding-phone")}
+              className="text-sm font-medium"
+            >
+              {t("welcome.login")}
+            </Button>
+          </div>
         </div>
       </motion.header>
 
@@ -78,8 +84,8 @@ export function WelcomeScreen() {
             className="mt-6"
           >
             <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/60 px-3 py-1 text-xs font-semibold text-accent-foreground">
-              <Sparkles className="w-3 h-3" />
-              Cameroun · Dès 10 000 XAF
+              <MapPin className="w-3 h-3" />
+              {t("welcome.badge")}
             </span>
           </motion.div>
 
@@ -89,8 +95,8 @@ export function WelcomeScreen() {
             transition={{ delay: 0.4, duration: 0.7 }}
             className="mt-5 font-display text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-[1.05]"
           >
-            Votre argent <br className="hidden sm:block" />
-            <span className="text-brand-gradient">travaille</span> pour vous.
+            {t("welcome.title1")} <br className="hidden sm:block" />
+            <span className="text-brand-gradient">{t("welcome.titleHighlight")}</span> {t("welcome.title2")}
           </motion.h1>
 
           <motion.p
@@ -99,9 +105,7 @@ export function WelcomeScreen() {
             transition={{ delay: 0.6, duration: 0.7 }}
             className="mt-5 mx-auto max-w-xl text-base sm:text-lg text-muted-foreground leading-relaxed"
           >
-            Déposez votre argent via Mobile Money. Notre robot intelligent
-            achète et revend pour vous, <strong className="text-foreground font-semibold">24h/24</strong>.
-            Vous voyez vos gains grandir, sans rien faire.
+            {t("welcome.subtitle")}
           </motion.p>
 
           <motion.div
@@ -115,11 +119,11 @@ export function WelcomeScreen() {
               onClick={() => setView("onboarding-phone")}
               className="w-full sm:w-auto h-13 px-7 text-base font-semibold rounded-xl shadow-soft group"
             >
-              Commencer maintenant
+              {t("welcome.cta.start")}
               <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-1" />
             </Button>
             <div className="text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground">2 minutes</span> pour s'inscrire
+              <span className="font-semibold text-foreground">{t("welcome.cta.timeHighlight")}</span> {t("welcome.cta.time")}
             </div>
           </motion.div>
         </motion.div>
@@ -145,18 +149,17 @@ export function WelcomeScreen() {
           className="text-center mb-10"
         >
           <h2 className="font-display text-2xl sm:text-3xl font-bold">
-            Simple. Sécurisé. Pour tous.
+            {t("welcome.pillars.title")}
           </h2>
           <p className="mt-3 text-muted-foreground max-w-lg mx-auto">
-            Pas besoin de connaître la technologie. CashPilot s'occupe de tout,
-            comme un ami de confiance.
+            {t("welcome.pillars.subtitle")}
           </p>
         </motion.div>
 
         <div className="grid gap-4 sm:grid-cols-3">
           {PILLARS.map((p, i) => (
             <motion.div
-              key={p.title}
+              key={p.titleKey}
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-50px" }}
@@ -169,9 +172,9 @@ export function WelcomeScreen() {
               >
                 <p.icon className="w-6 h-6" style={{ color: p.color }} />
               </div>
-              <h3 className="font-display font-semibold text-lg">{p.title}</h3>
+              <h3 className="font-display font-semibold text-lg">{t(p.titleKey)}</h3>
               <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-                {p.desc}
+                {t(p.descKey)}
               </p>
             </motion.div>
           ))}
@@ -188,17 +191,17 @@ export function WelcomeScreen() {
           className="text-center mb-12"
         >
           <h2 className="font-display text-2xl sm:text-3xl font-bold">
-            Comment ça marche ?
+            {t("welcome.how.title")}
           </h2>
           <p className="mt-3 text-muted-foreground">
-            Trois étapes, et votre argent se met à travailler.
+            {t("welcome.how.subtitle")}
           </p>
         </motion.div>
 
         <div className="grid gap-4 md:grid-cols-3">
           {STEPS.map((s, i) => (
             <motion.div
-              key={s.title}
+              key={s.titleKey}
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-50px" }}
@@ -209,10 +212,10 @@ export function WelcomeScreen() {
                 {i + 1}
               </div>
               <h3 className="font-display font-semibold text-lg mt-2">
-                {s.title}
+                {t(s.titleKey)}
               </h3>
               <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-                {s.desc}
+                {t(s.descKey)}
               </p>
             </motion.div>
           ))}
@@ -233,10 +236,10 @@ export function WelcomeScreen() {
           </div>
           <div className="relative">
             <h2 className="font-display text-2xl sm:text-3xl font-bold">
-              Combien puis-je gagner ?
+              {t("welcome.earnings.title")}
             </h2>
             <p className="mt-2 text-primary-foreground/80 max-w-lg">
-              Voici ce que vous pourriez gagner chaque mois, selon votre mise de départ.
+              {t("welcome.earnings.subtitle")}
             </p>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -250,13 +253,13 @@ export function WelcomeScreen() {
                   className="rounded-2xl bg-primary-foreground/10 backdrop-blur-sm border border-primary-foreground/20 p-5"
                 >
                   <div className="text-xs font-medium text-primary-foreground/70">
-                    Vous déposez
+                    {t("welcome.earnings.deposit")}
                   </div>
                   <div className="font-display font-bold text-2xl mt-1">
                     {formatXAF(e.capital)} XAF
                   </div>
                   <div className="mt-3 text-xs font-medium text-primary-foreground/70">
-                    Gain mensuel estimé
+                    {t("welcome.earnings.monthly")}
                   </div>
                   <div className="font-display font-bold text-xl text-[oklch(0.92 0.07 95)] mt-1">
                     {formatXAF(e.low)} – {formatXAF(e.high)} XAF
@@ -266,7 +269,7 @@ export function WelcomeScreen() {
             </div>
 
             <p className="mt-6 text-xs text-primary-foreground/60 max-w-xl">
-              Estimations indicatives basées sur les données de marché. Les performances passées ne garantissent pas les performances futures.
+              {t("welcome.earnings.disclaimer")}
             </p>
           </div>
         </motion.div>
@@ -282,18 +285,17 @@ export function WelcomeScreen() {
         >
           <CashPilotLogo size={56} className="mx-auto" />
           <h2 className="mt-6 font-display text-3xl sm:text-4xl font-bold">
-            Prêt à faire travailler votre argent ?
+            {t("welcome.cta2.title")}
           </h2>
           <p className="mt-3 text-muted-foreground max-w-md mx-auto">
-            Rejoignez les Camerounais qui génèrent des revenus automatiquement,
-            dès 10 000 XAF.
+            {t("welcome.cta2.subtitle")}
           </p>
           <Button
             size="lg"
             onClick={() => setView("onboarding-phone")}
             className="mt-6 h-13 px-8 text-base font-semibold rounded-xl shadow-soft group"
           >
-            Créer mon compte
+            {t("welcome.cta2.button")}
             <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-1" />
           </Button>
         </motion.div>
@@ -305,9 +307,19 @@ export function WelcomeScreen() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <CashPilotLogo size={36} withText />
             <div className="text-xs text-muted-foreground text-center sm:text-right">
-              <p>CashPilot · Douala, Cameroun</p>
-              <p className="mt-1">Votre argent travaille. 24h/24. Automatiquement.</p>
+              <p>{t("welcome.footer.location")}</p>
+              <p className="mt-1">{t("welcome.footer.slogan")}</p>
             </div>
+          </div>
+          {/* Accès admin discret */}
+          <div className="mt-6 flex justify-center">
+            <button
+              onClick={() => setView("admin-login")}
+              className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              aria-label={t("welcome.admin.access")}
+            >
+              ·
+            </button>
           </div>
         </div>
       </footer>
@@ -316,6 +328,7 @@ export function WelcomeScreen() {
 }
 
 function HeroPreviewCard() {
+  const t = useT();
   return (
     <motion.div
       animate={{ y: [0, -8, 0] }}
@@ -326,15 +339,15 @@ function HeroPreviewCard() {
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-[oklch(0.7_0.18_150)] robot-active-pulse" />
           <span className="text-xs font-medium text-muted-foreground">
-            Votre robot est actif
+            {t("welcome.preview.robotActive")}
           </span>
         </div>
-        <span className="text-xs text-muted-foreground">24h/24</span>
+        <span className="text-xs text-muted-foreground">{t("welcome.preview.always")}</span>
       </div>
 
       <div className="mt-5">
         <div className="text-xs font-medium text-muted-foreground">
-          Gains totaux
+          {t("welcome.preview.gainsTotal")}
         </div>
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
@@ -345,7 +358,7 @@ function HeroPreviewCard() {
           42 850 XAF
         </motion.div>
         <div className="mt-1 text-xs font-semibold text-[oklch(0.45_0.1_155)]">
-          +1 250 XAF aujourd'hui
+          {t("welcome.preview.todayGains")}
         </div>
       </div>
 
@@ -368,22 +381,22 @@ function HeroPreviewCard() {
 const PILLARS = [
   {
     icon: HeartHandshake,
-    title: "Simple comme bonjour",
-    desc: "Aucune connaissance technique. Déposez, regardez, retirez. C'est tout.",
+    titleKey: "welcome.pillars.simple.title",
+    descKey: "welcome.pillars.simple.desc",
     bg: "oklch(0.95 0.02 130)",
     color: "oklch(0.45 0.1 155)",
   },
   {
     icon: Shield,
-    title: "Votre argent est protégé",
-    desc: "Fonds séparés, PIN sécurisé, retrait possible à tout moment en 10 minutes.",
+    titleKey: "welcome.pillars.secure.title",
+    descKey: "welcome.pillars.secure.desc",
     bg: "oklch(0.95 0.03 90)",
     color: "oklch(0.6 0.13 85)",
   },
   {
     icon: Zap,
-    title: "Le robot ne dort jamais",
-    desc: "Il surveille 4 marchés en permanence, 24h/24, 7j/7, 365j/365.",
+    titleKey: "welcome.pillars.always.title",
+    descKey: "welcome.pillars.always.desc",
     bg: "oklch(0.95 0.02 155)",
     color: "oklch(0.45 0.1 155)",
   },
@@ -391,16 +404,16 @@ const PILLARS = [
 
 const STEPS = [
   {
-    title: "Déposez via Mobile Money",
-    desc: "MTN Money ou Orange Money, dès 10 000 XAF. Directement depuis l'app, sans frais cachés.",
+    titleKey: "welcome.how.step1.title",
+    descKey: "welcome.how.step1.desc",
   },
   {
-    title: "Le robot travaille",
-    desc: "Notre robot intelligent achète et revend automatiquement sur plusieurs marchés, en permanence.",
+    titleKey: "welcome.how.step2.title",
+    descKey: "welcome.how.step2.desc",
   },
   {
-    title: "Retirez quand vous voulez",
-    desc: "Vos gains sont disponibles en moins de 10 minutes sur votre Mobile Money, dès 2 000 XAF.",
+    titleKey: "welcome.how.step3.title",
+    descKey: "welcome.how.step3.desc",
   },
 ];
 

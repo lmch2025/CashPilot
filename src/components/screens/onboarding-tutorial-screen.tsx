@@ -6,37 +6,37 @@ import { ArrowRight, ArrowLeft, Wallet, Bot, Banknote, Check } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { CashPilotLogo } from "@/components/cashpilot/logo";
 import { useCashPilotStore } from "@/lib/store";
+import { useT } from "@/lib/i18n/context";
 
 const TUTORIAL_STEPS = [
   {
     icon: Wallet,
-    title: "Déposez votre argent",
-    description:
-      "Via MTN Money ou Orange Money, dès 10 000 XAF. C'est aussi simple que d'envoyer de l'argent à un proche.",
+    titleKey: "tutorial.step1.title",
+    descKey: "tutorial.step1.desc",
     color: "oklch(0.45 0.1 155)",
     bg: "oklch(0.95 0.02 130)",
   },
   {
     icon: Bot,
-    title: "Le robot fait tout",
-    description:
-      "Notre robot intelligent achète et revend automatiquement sur plusieurs marchés, 24h/24. Vous n'avez rien à faire.",
+    titleKey: "tutorial.step2.title",
+    descKey: "tutorial.step2.desc",
     color: "oklch(0.6 0.13 85)",
     bg: "oklch(0.95 0.03 90)",
   },
   {
     icon: Banknote,
-    title: "Retirez vos gains",
-    description:
-      "Quand vous voulez, dès 2 000 XAF. L'argent arrive sur votre Mobile Money en moins de 10 minutes.",
+    titleKey: "tutorial.step3.title",
+    descKey: "tutorial.step3.desc",
     color: "oklch(0.45 0.1 155)",
     bg: "oklch(0.95 0.02 155)",
   },
 ];
 
 export function OnboardingTutorialScreen() {
+  const t = useT();
   const setView = useCashPilotStore((s) => s.setView);
   const markTutorialSeen = useCashPilotStore((s) => s.markTutorialSeen);
+  const setModeSelectionContext = useCashPilotStore((s) => s.setModeSelectionContext);
   const [step, setStep] = useState(0);
 
   const next = () => {
@@ -44,7 +44,9 @@ export function OnboardingTutorialScreen() {
       setStep(step + 1);
     } else {
       markTutorialSeen();
-      setView("app");
+      // Nouveau: aller à la sélection de mode au lieu de l'app directement
+      setModeSelectionContext("onboarding");
+      setView("mode-selection");
     }
   };
 
@@ -64,11 +66,12 @@ export function OnboardingTutorialScreen() {
         <button
           onClick={() => {
             markTutorialSeen();
-            setView("app");
+            setModeSelectionContext("onboarding");
+            setView("mode-selection");
           }}
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          Passer
+          {t("common.skip")}
         </button>
       </header>
 
@@ -116,10 +119,10 @@ export function OnboardingTutorialScreen() {
               </motion.div>
 
               <h1 className="mt-8 font-display text-2xl sm:text-3xl font-bold">
-                {current.title}
+                {t(current.titleKey)}
               </h1>
               <p className="mt-4 text-muted-foreground leading-relaxed max-w-sm mx-auto">
-                {current.description}
+                {t(current.descKey)}
               </p>
             </motion.div>
           </AnimatePresence>
@@ -143,11 +146,11 @@ export function OnboardingTutorialScreen() {
               {isLast ? (
                 <>
                   <Check className="w-4 h-4 mr-2" />
-                  C'est parti !
+                  {t("tutorial.cta.final")}
                 </>
               ) : (
                 <>
-                  Suivant
+                  {t("common.next")}
                   <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-1" />
                 </>
               )}

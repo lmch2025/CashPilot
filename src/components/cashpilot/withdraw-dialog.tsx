@@ -21,6 +21,7 @@ import {
 import { useCashPilotStore } from "@/lib/store";
 import { formatXAF } from "@/lib/utils";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n/context";
 
 const MIN_WITHDRAW = 2000;
 
@@ -39,6 +40,7 @@ export function WithdrawDialog({
   balance,
   onSuccess,
 }: WithdrawDialogProps) {
+  const t = useT();
   const userId = useCashPilotStore((s) => s.userId);
   const [step, setStep] = useState<"amount" | "operator" | "pin" | "processing" | "success">(
     "amount"
@@ -100,7 +102,7 @@ export function WithdrawDialog({
       });
       const json = await res.json();
       if (!json.ok) {
-        setError(json.error || "Échec du retrait. Réessayez.");
+        setError(json.error || t("toast.withdrawFailed"));
         setStep("pin");
         setPin("");
         return;
@@ -113,7 +115,7 @@ export function WithdrawDialog({
       setStep("success");
       onSuccess?.();
     } catch {
-      setError("Problème de connexion. Réessayez.");
+      setError(t("toast.connectionError"));
       setStep("pin");
       setPin("");
     }
@@ -123,10 +125,10 @@ export function WithdrawDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
+      <DialogContent aria-describedby={undefined} className="max-w-md p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-5 pt-5 pb-3 flex flex-row items-center justify-between space-y-0">
           <DialogTitle className="font-display text-lg font-bold">
-            Retirer mes gains
+            {t("withdraw.title")}
           </DialogTitle>
         </DialogHeader>
 
@@ -142,14 +144,14 @@ export function WithdrawDialog({
                 transition={{ duration: 0.25 }}
               >
                 <div className="rounded-xl bg-muted/60 p-4 mb-4 text-center">
-                  <div className="text-xs text-muted-foreground">Solde disponible</div>
+                  <div className="text-xs text-muted-foreground">{t("withdraw.balance")}</div>
                   <div className="font-display font-bold text-2xl mt-1">
-                    {formatXAF(availableGains)} XAF
+                    {formatXAF(availableGains)} {t("common.xaf")}
                   </div>
                 </div>
 
                 <p className="text-sm text-muted-foreground mb-4">
-                  Combien voulez-vous retirer ? Le minimum est de {formatXAF(MIN_WITHDRAW)} XAF.
+                  {t("withdraw.amount.question", { amount: formatXAF(MIN_WITHDRAW) })}
                 </p>
 
                 <div className="relative mb-3">
@@ -166,7 +168,7 @@ export function WithdrawDialog({
                     placeholder="2000"
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
-                    XAF
+                    {t("common.xaf")}
                   </span>
                 </div>
 
@@ -178,7 +180,7 @@ export function WithdrawDialog({
                     }}
                     className="flex-1 h-10 rounded-lg border border-border bg-card text-xs font-semibold hover:bg-muted/50 transition-colors"
                   >
-                    Moitié
+                    {t("withdraw.half")}
                   </button>
                   <button
                     onClick={() => {
@@ -187,7 +189,7 @@ export function WithdrawDialog({
                     }}
                     className="flex-1 h-10 rounded-lg border border-border bg-card text-xs font-semibold hover:bg-muted/50 transition-colors"
                   >
-                    Tout ({formatXAF(availableGains)} XAF)
+                    {t("withdraw.all", { amount: formatXAF(availableGains) })}
                   </button>
                 </div>
 
@@ -200,11 +202,11 @@ export function WithdrawDialog({
                 <Button
                   onClick={() => {
                     if (amount < MIN_WITHDRAW) {
-                      setError(`Le retrait minimum est de ${formatXAF(MIN_WITHDRAW)} XAF.`);
+                      setError(t("withdraw.amount.minError", { amount: formatXAF(MIN_WITHDRAW) }));
                       return;
                     }
                     if (amount > availableGains) {
-                      setError(`Solde insuffisant. Maximum: ${formatXAF(availableGains)} XAF.`);
+                      setError(t("withdraw.amount.insufficient", { amount: formatXAF(availableGains) }));
                       return;
                     }
                     setStep("operator");
@@ -212,7 +214,7 @@ export function WithdrawDialog({
                   size="lg"
                   className="w-full h-12 font-semibold rounded-xl group"
                 >
-                  Continuer
+                  {t("withdraw.continue")}
                   <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-1" />
                 </Button>
               </motion.div>
@@ -233,19 +235,19 @@ export function WithdrawDialog({
                     className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <ArrowLeft className="w-4 h-4" />
-                    Modifier le montant
+                    {t("withdraw.modifyAmount")}
                   </button>
                 </div>
 
                 <div className="rounded-xl bg-muted/60 p-4 mb-4 flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Vous retirez</span>
+                  <span className="text-sm text-muted-foreground">{t("withdraw.youWithdraw")}</span>
                   <span className="font-display font-bold text-xl">
-                    {formatXAF(amount)} XAF
+                    {formatXAF(amount)} {t("common.xaf")}
                   </span>
                 </div>
 
                 <p className="text-sm text-muted-foreground mb-3">
-                  Sur quel Mobile Money recevoir l'argent ?
+                  {t("withdraw.chooseOperator")}
                 </p>
 
                 <div className="grid grid-cols-2 gap-3 mb-4">
@@ -266,7 +268,7 @@ export function WithdrawDialog({
                 <div className="rounded-xl bg-accent/40 border border-accent/60 p-3 mb-4 flex items-start gap-2">
                   <Shield className="w-4 h-4 text-accent-foreground mt-0.5 shrink-0" />
                   <p className="text-xs text-accent-foreground leading-relaxed">
-                    Virement en moins de 10 minutes. Aucun frais CashPilot.
+                    {t("withdraw.reassurance")}
                   </p>
                 </div>
 
@@ -276,7 +278,7 @@ export function WithdrawDialog({
                   size="lg"
                   className="w-full h-12 font-semibold rounded-xl group"
                 >
-                  Continuer
+                  {t("withdraw.continue")}
                   <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-1" />
                 </Button>
               </motion.div>
@@ -301,7 +303,7 @@ export function WithdrawDialog({
                     className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <ArrowLeft className="w-4 h-4" />
-                    Retour
+                    {t("common.back")}
                   </button>
                 </div>
 
@@ -315,11 +317,10 @@ export function WithdrawDialog({
                     <Lock className="w-7 h-7 text-primary-foreground" />
                   </motion.div>
                   <h3 className="mt-4 font-display font-bold text-lg">
-                    Confirmez avec votre PIN
+                    {t("withdraw.pin.title")}
                   </h3>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Entrez votre code PIN à 4 chiffres pour valider le retrait de{" "}
-                    <strong className="text-foreground">{formatXAF(amount)} XAF</strong>.
+                    {t("withdraw.pin.desc", { amount: formatXAF(amount) })}
                   </p>
 
                   <div className="mt-6 flex justify-center gap-4">
@@ -394,11 +395,13 @@ export function WithdrawDialog({
                   <span className="text-2xl">{operator === "mtn" ? "🟡" : "🟠"}</span>
                 </motion.div>
                 <h3 className="mt-6 font-display font-bold text-lg">
-                  Virement en cours...
+                  {t("withdraw.processing.title")}
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Envoi de {formatXAF(amount)} XAF vers votre{" "}
-                  {operator === "mtn" ? "MTN Money" : "Orange Money"}.
+                  {t("withdraw.processing.desc", {
+                    amount: formatXAF(amount),
+                    operator: operator === "mtn" ? "MTN Money" : "Orange Money",
+                  })}
                 </p>
               </motion.div>
             )}
@@ -421,17 +424,19 @@ export function WithdrawDialog({
                 </motion.div>
 
                 <h3 className="mt-6 font-display font-bold text-xl">
-                  Virement effectué !
+                  {t("withdraw.success.title")}
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  <strong className="text-foreground">{formatXAF(result.amount)} XAF</strong> envoyés sur votre{" "}
-                  {result.operator === "mtn" ? "MTN Money" : "Orange Money"}.
+                  {t("withdraw.success.desc", {
+                    amount: formatXAF(result.amount),
+                    operator: result.operator === "mtn" ? "MTN Money" : "Orange Money",
+                  })}
                 </p>
 
                 <div className="mt-5 rounded-xl bg-muted/60 p-4">
-                  <div className="text-xs text-muted-foreground">Nouveau solde</div>
+                  <div className="text-xs text-muted-foreground">{t("withdraw.success.newBalance")}</div>
                   <div className="font-display font-bold text-lg mt-1">
-                    {formatXAF(result.newBalance)} XAF
+                    {formatXAF(result.newBalance)} {t("common.xaf")}
                   </div>
                 </div>
 
@@ -440,7 +445,7 @@ export function WithdrawDialog({
                   size="lg"
                   className="w-full h-12 mt-5 font-semibold rounded-xl"
                 >
-                  Fermer
+                  {t("withdraw.success.cta")}
                 </Button>
               </motion.div>
             )}

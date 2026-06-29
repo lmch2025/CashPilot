@@ -9,8 +9,10 @@ import { CashPilotLogo } from "@/components/cashpilot/logo";
 import { useCashPilotStore } from "@/lib/store";
 import { isValidCameroonPhone, normalizePhone, formatPhoneDisplay } from "@/lib/utils";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n/context";
 
 export function OnboardingPhoneScreen() {
+  const t = useT();
   const setView = useCashPilotStore((s) => s.setView);
   const setPendingPhone = useCashPilotStore((s) => s.setPendingPhone);
   const [phone, setPhone] = useState("");
@@ -23,7 +25,7 @@ export function OnboardingPhoneScreen() {
   const handleSubmit = async () => {
     setError(null);
     if (!valid) {
-      setError("Numéro invalide. Exemple: 6XXXXXXXX (MTN/Orange Cameroun).");
+      setError(t("onboarding.phone.invalid"));
       return;
     }
     setLoading(true);
@@ -35,7 +37,7 @@ export function OnboardingPhoneScreen() {
       });
       const json = await res.json();
       if (!json.ok) {
-        setError(json.error || "Erreur. Réessayez.");
+        setError(json.error || t("toast.connectionError"));
         return;
       }
       setPendingPhone(normalized);
@@ -46,7 +48,7 @@ export function OnboardingPhoneScreen() {
       }
       setView("onboarding-code");
     } catch {
-      setError("Problème de connexion. Réessayez.");
+      setError(t("toast.connectionError"));
     } finally {
       setLoading(false);
     }
@@ -62,7 +64,7 @@ export function OnboardingPhoneScreen() {
           className="gap-1"
         >
           <ArrowLeft className="w-4 h-4" />
-          Retour
+          {t("common.back")}
         </Button>
       </header>
 
@@ -76,22 +78,22 @@ export function OnboardingPhoneScreen() {
           <div className="text-center">
             <CashPilotLogo size={64} className="mx-auto" animated />
             <h1 className="mt-6 font-display text-2xl sm:text-3xl font-bold">
-              Bienvenue 👋
+              {t("onboarding.phone.title")}
             </h1>
             <p className="mt-3 text-muted-foreground">
-              Entrez votre numéro de téléphone pour créer votre compte ou vous connecter.
+              {t("onboarding.phone.subtitle")}
             </p>
           </div>
 
           <div className="mt-8 space-y-3">
             <label className="text-sm font-medium text-foreground">
-              Votre numéro de téléphone
+              {t("onboarding.phone.label")}
             </label>
             <div className="relative">
               <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 inputMode="numeric"
-                placeholder="6XX XX XX XX"
+                placeholder={t("onboarding.phone.placeholder")}
                 value={phone}
                 onChange={(e) => {
                   // Garder seulement les chiffres, max 9
@@ -113,10 +115,10 @@ export function OnboardingPhoneScreen() {
               <div className="text-xs text-muted-foreground">
                 {valid ? (
                   <span className="text-[oklch(0.45_0.1_155)] font-medium">
-                    Nous allons envoyer un code par SMS au {formatPhoneDisplay(normalized)}
+                    {t("onboarding.phone.valid")} {formatPhoneDisplay(normalized)}
                   </span>
                 ) : (
-                  <span>Numéro à 9 chiffres commençant par 6 (MTN/Orange Cameroun).</span>
+                  <span>{t("onboarding.phone.hint")}</span>
                 )}
               </div>
             )}
@@ -143,11 +145,11 @@ export function OnboardingPhoneScreen() {
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Envoi du code...
+                  {t("onboarding.phone.sending")}
                 </>
               ) : (
                 <>
-                  Recevoir mon code
+                  {t("onboarding.phone.submit")}
                   <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-1" />
                 </>
               )}
@@ -155,7 +157,7 @@ export function OnboardingPhoneScreen() {
           </div>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            En continuant, vous acceptez nos conditions d'utilisation et notre politique de confidentialité.
+            {t("onboarding.phone.terms")}
           </p>
         </motion.div>
       </main>

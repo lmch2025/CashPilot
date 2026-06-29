@@ -1,13 +1,15 @@
 // CashPilot - Prisma schema
 // Application de revenus passifs via arbitrage P2P
+// Deux modes: "managed" (CashPilot gère) | "alerts" (CashPilot alerte, abonnement)
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -21,21 +23,29 @@ model User {
   totalGains   Int      @default(0) // cumul de tous les gains
   totalExchanges Int    @default(0) // nombre d'échanges réalisés
   status       String   @default("active") // "active" | "paused"
+  // Nouveau: mode de fonctionnement
+  mode         String   @default("managed") // "managed" (CashPilot gère) | "alerts" (abonnement opportunités)
+  // Nouveau: abonnement (pour le mode alerts)
+  subscriptionPlan     String?  // "decouverte" | "standard" | "premium"
+  subscriptionExpiresAt DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   transactions     Transaction[]
   robotEvents      RobotEvent[]
+  opportunities    Opportunity[]
 }
 
 model Transaction {
   id            String   @id @default(cuid())
   userId        String
-  type          String   // "deposit" | "withdraw" | "gain"
-  amount        Int      // montant en XAF (positif pour depot/gain, negatif pour retrait)
+  type          String   // "deposit" | "withdraw" | "gain" | "subscription"
+  amount        Int      // montant en XAF (positif pour depot/gain/subscription, negatif pour retrait)
   balanceAfter  Int
   description   String
-  operator      String?  // "mtn" | "orange" pour depot/retrait
+  operator      String?  // "mtn" | "orange" pour depot/retrait/subscription
+  // Nouveau: référence au plan d'abonnement (pour type=subscription)
+  planId        String?  // "decouverte" | "standard" | "premium"
   createdAt     DateTime @default(now())
 
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -48,11 +58,40 @@ model RobotEvent {
   id          String   @id @default(cuid())
   userId      String
   gain        Int      // gain réalisé en XAF
-  market      String   // "binance" | "yellowcard" | "paxful" | "bitget"
+  market      String   // "Binance P2P" | "Yellow Card" | "Paxful" | "Bitget"
   pair        String   // paire échangée (ex: "USDT/XAF")
   createdAt   DateTime @default(now())
 
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+// Nouveau: Opportunités d'achat-vente (pour le mode alerts)
+model Opportunity {
+  id          String   @id @default(cuid())
+  userId      String   // utilisateur destinataire (chaque utilisateur a ses propres opportunités)
+  market      String   // "Binance P2P" | "Yellow Card" | "Paxful" | "Bitget"
+  pair        String   // "USDT/XAF" | "BTC/XAF"
+  buyPrice    Int      // prix d'achat en XAF (par unité)
+  sellPrice   Int      // prix de vente en XAF (par unité)
+  estimatedGain Int    // gain estimé en XAF (pour 50 000 XAF de capital de référence)
+  estimatedGainPercent Float // pourcentage du gain
+  validUntil  DateTime // date d'expiration de l'opportunité
+  status      String   @default("active") // "active" | "expired" | "executed" | "skipped"
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, status])
+  @@index([validUntil])
+}
+
+// Nouveau: Configuration clé-valeur (pour l'admin)
+// Stocke les configs du robot, des opportunités, des plans, et globales
+model Config {
+  key       String   @id // "robot" | "opportunities" | "global" | "plans" | "admin"
+  value     String   // JSON string
+  updatedAt DateTime @updatedAt
 }

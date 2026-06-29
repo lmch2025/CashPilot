@@ -138,3 +138,57 @@ export function isThisMonth(dateString: string): boolean {
     date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
   );
 }
+
+// === LocalStorage settings helper (Task 2-c-dash) ===
+// Type-safe localStorage wrapper for user preferences.
+const SETTINGS_PREFIX = "cashpilot-setting:";
+
+export function getSetting(key: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = localStorage.getItem(SETTINGS_PREFIX + key);
+    if (raw === null) return false;
+    return raw === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function setSetting(key: string, value: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(SETTINGS_PREFIX + key, String(value));
+    // Notify listeners (other components on the same page)
+    window.dispatchEvent(
+      new CustomEvent("cashpilot-setting-change", { detail: { key, value } })
+    );
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Compute a live countdown to a future date.
+ * Returns days, hours, minutes (and whether expired).
+ */
+export interface Countdown {
+  expired: boolean;
+  days: number;
+  hours: number;
+  minutes: number;
+  totalMs: number;
+}
+
+export function computeCountdown(targetIso: string | null): Countdown | null {
+  if (!targetIso) return null;
+  const target = new Date(targetIso).getTime();
+  const now = Date.now();
+  const totalMs = target - now;
+  if (totalMs <= 0) {
+    return { expired: true, days: 0, hours: 0, minutes: 0, totalMs: 0 };
+  }
+  const days = Math.floor(totalMs / (24 * 60 * 60 * 1000));
+  const hours = Math.floor((totalMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  const minutes = Math.floor((totalMs % (60 * 60 * 1000)) / (60 * 1000));
+  return { expired: false, days, hours, minutes, totalMs };
+}

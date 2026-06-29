@@ -6,8 +6,10 @@ import { ArrowLeft, Loader2, Lock, Delete } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CashPilotLogo } from "@/components/cashpilot/logo";
 import { useCashPilotStore } from "@/lib/store";
+import { useT } from "@/lib/i18n/context";
 
 export function OnboardingPinScreen() {
+  const t = useT();
   const setView = useCashPilotStore((s) => s.setView);
   const pendingPhone = useCashPilotStore((s) => s.pendingPhone);
   const setSession = useCashPilotStore((s) => s.setSession);
@@ -35,7 +37,7 @@ export function OnboardingPinScreen() {
         });
         const json = await res.json();
         if (!json.ok) {
-          setError(json.error || "Erreur lors de la création du compte.");
+          setError(json.error || t("onboarding.pin.incorrect"));
           setPin("");
           return;
         }
@@ -45,7 +47,7 @@ export function OnboardingPinScreen() {
         setSession(json.userId, json.phone);
         setView("onboarding-tutorial");
       } catch {
-        setError("Problème de connexion. Réessayez.");
+        setError(t("toast.connectionError"));
         setPin("");
       } finally {
         setLoading(false);
@@ -65,7 +67,7 @@ export function OnboardingPinScreen() {
         });
         const json = await res.json();
         if (!json.ok) {
-          setError(json.error || "PIN incorrect.");
+          setError(json.error || t("onboarding.pin.incorrect"));
           setPin("");
           return;
         }
@@ -74,7 +76,7 @@ export function OnboardingPinScreen() {
         setSession(json.userId, json.phone);
         setView("app");
       } catch {
-        setError("Problème de connexion. Réessayez.");
+        setError(t("toast.connectionError"));
         setPin("");
       } finally {
         setLoading(false);
@@ -102,7 +104,7 @@ export function OnboardingPinScreen() {
         setConfirmPin(newPin);
         if (newPin.length === 4) {
           if (newPin !== pin) {
-            setError("Les deux PIN ne sont pas identiques. Réessayez.");
+            setError(t("onboarding.pin.mismatch"));
             setTimeout(() => {
               setPin("");
               setConfirmPin("");
@@ -152,7 +154,7 @@ export function OnboardingPinScreen() {
           className="gap-1"
         >
           <ArrowLeft className="w-4 h-4" />
-          Retour
+          {t("common.back")}
         </Button>
       </header>
 
@@ -175,16 +177,16 @@ export function OnboardingPinScreen() {
           <h1 className="mt-6 font-display text-2xl sm:text-3xl font-bold">
             {isNew
               ? step === "create"
-                ? "Créez votre code PIN"
-                : "Confirmez votre PIN"
-              : "Entrez votre PIN"}
+                ? t("onboarding.pin.create.title")
+                : t("onboarding.pin.confirm.title")
+              : t("onboarding.pin.login.title")}
           </h1>
           <p className="mt-3 text-muted-foreground">
             {isNew
               ? step === "create"
-                ? "4 chiffres pour sécuriser votre compte. Ce code sera demandé pour chaque retrait."
-                : "Retapez votre code PIN pour confirmer."
-              : "Entrez votre code PIN à 4 chiffres pour vous connecter."}
+                ? t("onboarding.pin.create.desc")
+                : t("onboarding.pin.confirm.desc")
+              : t("onboarding.pin.login.desc")}
           </p>
 
           {/* PIN dots */}
@@ -222,7 +224,7 @@ export function OnboardingPinScreen() {
               className="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground"
             >
               <Loader2 className="w-4 h-4 animate-spin" />
-              Création de votre compte...
+              {t("onboarding.pin.creating")}
             </motion.div>
           )}
 

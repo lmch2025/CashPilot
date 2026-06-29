@@ -8,8 +8,10 @@ import { CashPilotLogo } from "@/components/cashpilot/logo";
 import { useCashPilotStore } from "@/lib/store";
 import { formatPhoneDisplay } from "@/lib/utils";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n/context";
 
 export function OnboardingCodeScreen() {
+  const t = useT();
   const setView = useCashPilotStore((s) => s.setView);
   const pendingPhone = useCashPilotStore((s) => s.pendingPhone);
   const [code, setCode] = useState(["", "", "", ""]);
@@ -84,7 +86,7 @@ export function OnboardingCodeScreen() {
       });
       const json = await res.json();
       if (!json.ok) {
-        setError(json.error || "Code incorrect.");
+        setError(json.error || t("onboarding.code.error"));
         setCode(["", "", "", ""]);
         inputsRef.current[0]?.focus();
         return;
@@ -92,7 +94,7 @@ export function OnboardingCodeScreen() {
       // Code vérifié. Si nouvel utilisateur: écran PIN, sinon: écran PIN (connexion)
       setView("onboarding-pin");
     } catch {
-      setError("Problème de connexion. Réessayez.");
+      setError(t("toast.connectionError"));
     } finally {
       setLoading(false);
     }
@@ -121,7 +123,7 @@ export function OnboardingCodeScreen() {
           className="gap-1"
         >
           <ArrowLeft className="w-4 h-4" />
-          Retour
+          {t("common.back")}
         </Button>
       </header>
 
@@ -142,10 +144,10 @@ export function OnboardingCodeScreen() {
               <MessageSquare className="w-8 h-8 text-accent-foreground" />
             </motion.div>
             <h1 className="mt-6 font-display text-2xl sm:text-3xl font-bold">
-              Entrez le code SMS
+              {t("onboarding.code.title")}
             </h1>
             <p className="mt-3 text-muted-foreground">
-              Nous avons envoyé un code à 4 chiffres au{" "}
+              {t("onboarding.code.subtitle")}{" "}
               <strong className="text-foreground font-semibold">
                 {formatPhoneDisplay(pendingPhone)}
               </strong>
@@ -192,7 +194,7 @@ export function OnboardingCodeScreen() {
               className="mt-6 rounded-xl bg-muted/60 border border-border/60 px-4 py-3 text-center"
             >
               <p className="text-xs text-muted-foreground mb-1">
-                📱 Démo — votre code SMS est:
+                {t("onboarding.code.demoLabel")}
               </p>
               <button
                 onClick={fillDemoCode}
@@ -202,7 +204,7 @@ export function OnboardingCodeScreen() {
                 {demoCode}
               </button>
               <p className="text-[10px] text-muted-foreground mt-1">
-                (cliquez pour remplir automatiquement)
+                {t("onboarding.code.demoHint")}
               </p>
             </motion.div>
           )}
@@ -216,11 +218,11 @@ export function OnboardingCodeScreen() {
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Vérification...
+                {t("onboarding.code.verifying")}
               </>
             ) : (
               <>
-                Continuer
+                {t("common.continue")}
                 <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-1" />
               </>
             )}
@@ -230,7 +232,7 @@ export function OnboardingCodeScreen() {
             onClick={() => setView("onboarding-phone")}
             className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            Vous n'avez pas reçu le code? Changer de numéro
+            {t("onboarding.code.resend")}
           </button>
         </motion.div>
       </main>

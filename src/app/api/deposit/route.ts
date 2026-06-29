@@ -5,8 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { formatXAF } from "@/lib/utils";
-
-const MIN_DEPOSIT = 10000;
+import { getGlobalConfig, getRobotConfig } from "@/lib/config-server";
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,11 +23,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (amount < MIN_DEPOSIT) {
+    const { minDeposit } = await getGlobalConfig();
+    const { croissanceThreshold } = await getRobotConfig();
+
+    if (amount < minDeposit) {
       return NextResponse.json(
         {
           ok: false,
-          error: `Le dépôt minimum est de ${formatXAF(MIN_DEPOSIT)} XAF.`,
+          error: `Le dépôt minimum est de ${formatXAF(minDeposit)} XAF.`,
         },
         { status: 400 }
       );
@@ -70,8 +72,10 @@ export async function POST(req: NextRequest) {
       }),
     ]);
 
-    // Si l'utilisateur passe le seuil Croissance (50 000 XAF), on notifie via la réponse
-    const becameCroissance = user.level === "starter" && newCapital >= 50000;
+    // Si l'utilisateur passe le seuil Croissance (configuré dans robot.croissanceThreshold),
+    // on notifie via la réponse
+    const becameCroissance =
+      user.level === "starter" && newCapital >= croissanceThreshold;
     if (becameCroissance) {
       await db.user.update({
         where: { id: userId },

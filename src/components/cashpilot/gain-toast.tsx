@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { TrendingUp } from "lucide-react";
 import { useCashPilotStore } from "@/lib/store";
 import { formatXAF } from "@/lib/utils";
+import { useT } from "@/lib/i18n/context";
 
 /**
  * Affiche une notification flottante en bas de l'écran quand le robot fait un gain.
@@ -18,9 +19,10 @@ function ToastContent({
   amount: number;
   onAutoHide: () => void;
 }) {
+  const t = useT();
   useEffect(() => {
-    const t = setTimeout(onAutoHide, 3500);
-    return () => clearTimeout(t);
+    const timer = setTimeout(onAutoHide, 3500);
+    return () => clearTimeout(timer);
   }, [onAutoHide]);
 
   return (
@@ -41,7 +43,7 @@ function ToastContent({
         </motion.div>
         <div className="flex-1 min-w-0">
           <div className="text-[11px] font-medium text-primary-foreground/80">
-            Le robot vient de gagner
+            {t("gainToast.title")}
           </div>
           <motion.div
             initial={{ scale: 1 }}
@@ -49,7 +51,7 @@ function ToastContent({
             transition={{ duration: 0.4, delay: 0.2 }}
             className="font-display font-extrabold text-lg leading-tight"
           >
-            +{formatXAF(amount)} XAF
+            +{formatXAF(amount)} {t("common.xaf")}
           </motion.div>
         </div>
       </div>

@@ -9,7 +9,7 @@ import {
   ArrowRight,
   ArrowLeft,
   Shield,
-  Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ import { useCashPilotStore } from "@/lib/store";
 import { formatXAF } from "@/lib/utils";
 import { toast } from "sonner";
 import { CashPilotLogo } from "@/components/cashpilot/logo";
+import { useT } from "@/lib/i18n/context";
 
 const MIN_DEPOSIT = 10000;
 const QUICK_AMOUNTS = [10000, 25000, 50000, 100000];
@@ -40,6 +41,7 @@ export function DepositDialog({
   onOpenChange,
   onSuccess,
 }: DepositDialogProps) {
+  const t = useT();
   const userId = useCashPilotStore((s) => s.userId);
   const [step, setStep] = useState<"amount" | "operator" | "processing" | "success">(
     "amount"
@@ -85,7 +87,7 @@ export function DepositDialog({
       });
       const json = await res.json();
       if (!json.ok) {
-        setError(json.error || "Échec du dépôt. Réessayez.");
+        setError(json.error || t("toast.depositFailed"));
         setStep("operator");
         return;
       }
@@ -97,23 +99,23 @@ export function DepositDialog({
       });
       setStep("success");
       if (json.becameCroissance) {
-        toast.success("🎉 Vous êtes passé au niveau Croissance !", {
-          description: "Retraits prioritaires et rapport hebdomadaire.",
+        toast.success(t("toast.croissanceUpgraded"), {
+          description: t("toast.croissanceDesc"),
         });
       }
       onSuccess?.();
     } catch {
-      setError("Problème de connexion. Réessayez.");
+      setError(t("toast.connectionError"));
       setStep("operator");
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
+      <DialogContent aria-describedby={undefined} className="max-w-md p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-5 pt-5 pb-3 flex flex-row items-center justify-between space-y-0">
           <DialogTitle className="font-display text-lg font-bold">
-            Déposer mes fonds
+            {t("deposit.title")}
           </DialogTitle>
         </DialogHeader>
 
@@ -129,8 +131,7 @@ export function DepositDialog({
                 transition={{ duration: 0.25 }}
               >
                 <p className="text-sm text-muted-foreground mb-4">
-                  Combien voulez-vous déposer ? Le minimum est de{" "}
-                  <strong className="text-foreground">{formatXAF(MIN_DEPOSIT)} XAF</strong>.
+                  {t("deposit.amount.question", { amount: formatXAF(MIN_DEPOSIT) })}
                 </p>
 
                 <div className="relative mb-4">
@@ -147,7 +148,7 @@ export function DepositDialog({
                     placeholder="10000"
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
-                    XAF
+                    {t("common.xaf")}
                   </span>
                 </div>
 
@@ -165,7 +166,7 @@ export function DepositDialog({
                           : "border-border bg-card hover:bg-muted/50"
                       }`}
                     >
-                      {formatXAF(q)} XAF
+                      {formatXAF(q)} {t("common.xaf")}
                     </button>
                   ))}
                 </div>
@@ -179,7 +180,7 @@ export function DepositDialog({
                 <Button
                   onClick={() => {
                     if (amount < MIN_DEPOSIT) {
-                      setError(`Le dépôt minimum est de ${formatXAF(MIN_DEPOSIT)} XAF.`);
+                      setError(t("deposit.amount.minError", { amount: formatXAF(MIN_DEPOSIT) }));
                       return;
                     }
                     setStep("operator");
@@ -187,7 +188,7 @@ export function DepositDialog({
                   size="lg"
                   className="w-full h-12 font-semibold rounded-xl group"
                 >
-                  Continuer
+                  {t("deposit.continue")}
                   <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-1" />
                 </Button>
               </motion.div>
@@ -208,19 +209,19 @@ export function DepositDialog({
                     className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <ArrowLeft className="w-4 h-4" />
-                    Modifier le montant
+                    {t("deposit.modifyAmount")}
                   </button>
                 </div>
 
                 <div className="rounded-xl bg-muted/60 p-4 mb-4 flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Vous déposez</span>
+                  <span className="text-sm text-muted-foreground">{t("deposit.youDeposit")}</span>
                   <span className="font-display font-bold text-xl">
-                    {formatXAF(amount)} XAF
+                    {formatXAF(amount)} {t("common.xaf")}
                   </span>
                 </div>
 
                 <p className="text-sm text-muted-foreground mb-3">
-                  Choisissez votre opérateur Mobile Money:
+                  {t("deposit.chooseOperator")}
                 </p>
 
                 <div className="grid grid-cols-2 gap-3 mb-4">
@@ -245,7 +246,7 @@ export function DepositDialog({
                 <div className="rounded-xl bg-accent/40 border border-accent/60 p-3 mb-4 flex items-start gap-2">
                   <Shield className="w-4 h-4 text-accent-foreground mt-0.5 shrink-0" />
                   <p className="text-xs text-accent-foreground leading-relaxed">
-                    Vous confirmerez le paiement avec votre PIN Mobile Money habituel. Aucun frais CashPilot.
+                    {t("deposit.reassurance")}
                   </p>
                 </div>
 
@@ -261,7 +262,7 @@ export function DepositDialog({
                   size="lg"
                   className="w-full h-12 font-semibold rounded-xl group"
                 >
-                  Payer {formatXAF(amount)} XAF
+                  {t("deposit.pay", { amount: formatXAF(amount) })}
                   <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-1" />
                 </Button>
               </motion.div>
@@ -283,14 +284,14 @@ export function DepositDialog({
                   <span className="text-2xl">{operator === "mtn" ? "🟡" : "🟠"}</span>
                 </motion.div>
                 <h3 className="mt-6 font-display font-bold text-lg">
-                  Traitement du paiement...
+                  {t("deposit.processing.title")}
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Confirmez le paiement sur votre téléphone avec votre PIN {operator === "mtn" ? "MTN" : "Orange"} Money.
+                  {t("deposit.processing.desc")} {operator === "mtn" ? "MTN" : "Orange"} Money.
                 </p>
                 <div className="mt-4 inline-flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  Cela peut prendre quelques secondes...
+                  {t("deposit.processing.wait")}
                 </div>
               </motion.div>
             )}
@@ -313,11 +314,13 @@ export function DepositDialog({
                 </motion.div>
 
                 <h3 className="mt-6 font-display font-bold text-xl">
-                  Dépôt réussi !
+                  {t("deposit.success.title")}
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Votre dépôt de <strong className="text-foreground">{formatXAF(result.amount)} XAF</strong> via{" "}
-                  {result.operator === "mtn" ? "MTN Money" : "Orange Money"} est confirmé.
+                  {t("deposit.success.desc", {
+                    amount: formatXAF(result.amount),
+                    operator: result.operator === "mtn" ? "MTN Money" : "Orange Money",
+                  })}
                 </p>
 
                 {result.becameCroissance && (
@@ -327,18 +330,18 @@ export function DepositDialog({
                     transition={{ delay: 0.3 }}
                     className="mt-4 rounded-xl bg-gold-gradient p-3 flex items-center gap-2"
                   >
-                    <Sparkles className="w-5 h-5 text-accent-foreground" />
+                    <TrendingUp className="w-5 h-5 text-accent-foreground" />
                     <div className="text-left text-xs">
-                      <div className="font-bold text-accent-foreground">Niveau Croissance débloqué !</div>
-                      <div className="text-accent-foreground/80">Retraits prioritaires + rapport hebdo</div>
+                      <div className="font-bold text-accent-foreground">{t("deposit.success.croissance")}</div>
+                      <div className="text-accent-foreground/80">{t("deposit.success.croissanceDesc")}</div>
                     </div>
                   </motion.div>
                 )}
 
                 <div className="mt-5 rounded-xl bg-muted/60 p-4">
-                  <div className="text-xs text-muted-foreground">Votre robot démarre maintenant</div>
+                  <div className="text-xs text-muted-foreground">{t("deposit.success.robotStarts")}</div>
                   <div className="mt-1 font-display font-bold text-lg">
-                    Nouveau solde: {formatXAF(result.newBalance)} XAF
+                    {t("deposit.success.newBalance", { amount: formatXAF(result.newBalance) })}
                   </div>
                 </div>
 
@@ -347,7 +350,7 @@ export function DepositDialog({
                   size="lg"
                   className="w-full h-12 mt-5 font-semibold rounded-xl"
                 >
-                  Voir mes gains
+                  {t("deposit.success.cta")}
                 </Button>
               </motion.div>
             )}

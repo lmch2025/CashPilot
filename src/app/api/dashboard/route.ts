@@ -1,10 +1,11 @@
 // CashPilot - Dashboard
 // GET /api/dashboard?userId=xxx
-// Retourne toutes les données nécessaires au tableau de bord
+// Retourne toutes les données nécessaires au tableau de bord (managed + alerts modes)
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isToday } from "@/lib/utils";
+import { getPlanById } from "@/lib/plans";
 
 export async function GET(req: NextRequest) {
   try {
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
       take: 20,
     });
 
-    // Gains du jour
+    // Gains du jour (mode managed uniquement)
     const todayGainTx = await db.transaction.findMany({
       where: {
         userId,
@@ -47,14 +48,13 @@ export async function GET(req: NextRequest) {
       isToday(t.createdAt.toISOString())
     ).length;
 
-    // Dernier échange (robot event)
+    // Dernier échange (robot event, mode managed)
     const lastRobotEvent = await db.robotEvent.findFirst({
       where: { userId },
       orderBy: { createdAt: "desc" },
     });
 
-    // Historique des gains pour le graphique (24 derniers points)
-    // On agrège par heure pour les 24 dernières heures
+    // Historique des gains pour le graphique (24 derniers points, mode managed)
     const now = new Date();
     const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const gainEvents = await db.transaction.findMany({
@@ -66,7 +66,6 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "asc" },
     });
 
-    // Construire un graphique cumulatif sur 24h
     const buckets: { time: string; value: number }[] = [];
     const bucketSizeMs = 60 * 60 * 1000; // 1 heure
     const startBucket = new Date(
@@ -89,6 +88,32 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // === Nouveau: infos d'abonnement (pour le mode alerts) ===
+    const subscriptionExpiresAt = user.subscriptionExpiresAt;
+    const isActive =
+      subscriptionExpiresAt !== null && subscriptionExpiresAt > now;
+    const daysRemaining = isActive
+      ? Math.ceil(
+          (subscriptionExpiresAt!.getTime() - now.getTime()) /
+            (24 * 60 * 60 * 1000)
+        )
+      : 0;
+    const plan = getPlanById(user.subscriptionPlan);
+
+    // === Nouveau: stats d'opportunités (pour le mode alerts) ===
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const todayOpportunities = await db.opportunity.count({
+      where: {
+        userId,
+        createdAt: { gte: startOfToday },
+      },
+    });
+    const totalReceived = await db.opportunity.count({ where: { userId } });
+    const totalExecuted = await db.opportunity.count({
+      where: { userId, status: "executed" },
+    });
+
     return NextResponse.json({
       ok: true,
       user: {
@@ -101,6 +126,16 @@ export async function GET(req: NextRequest) {
         totalGains: user.totalGains,
         totalExchanges: user.totalExchanges,
         status: user.status,
+        // Nouveau
+        mode: user.mode as "managed" | "alerts",
+        subscriptionPlan: user.subscriptionPlan as
+          | "decouverte"
+          | "standard"
+          | "premium"
+          | null,
+        subscriptionExpiresAt: subscriptionExpiresAt
+          ? subscriptionExpiresAt.toISOString()
+          : null,
         createdAt: user.createdAt.toISOString(),
       },
       todayGains,
@@ -120,9 +155,25 @@ export async function GET(req: NextRequest) {
         balanceAfter: t.balanceAfter,
         description: t.description,
         operator: t.operator,
+        planId: t.planId as
+          | "decouverte"
+          | "standard"
+          | "premium"
+          | null,
         createdAt: t.createdAt.toISOString(),
       })),
       gainsHistory: buckets,
+      // Nouveau
+      subscription: {
+        isActive,
+        daysRemaining,
+        plan,
+      },
+      opportunitiesStats: {
+        todayCount: todayOpportunities,
+        totalReceived,
+        totalExecuted,
+      },
     });
   } catch (err) {
     console.error("[dashboard] error:", err);

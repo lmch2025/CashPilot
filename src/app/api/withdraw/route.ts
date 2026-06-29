@@ -5,8 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { formatXAF, verifyPin } from "@/lib/utils";
-
-const MIN_WITHDRAW = 2000;
+import { getGlobalConfig } from "@/lib/config-server";
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,11 +24,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (amount < MIN_WITHDRAW) {
+    const { minWithdraw } = await getGlobalConfig();
+
+    if (amount < minWithdraw) {
       return NextResponse.json(
         {
           ok: false,
-          error: `Le retrait minimum est de ${formatXAF(MIN_WITHDRAW)} XAF.`,
+          error: `Le retrait minimum est de ${formatXAF(minWithdraw)} XAF.`,
         },
         { status: 400 }
       );
