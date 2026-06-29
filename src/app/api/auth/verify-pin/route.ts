@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const valid = await verifyPin(pin, user.pinHash);
+    const valid = verifyPin(pin, user.pinHash);
     if (!valid) {
       return NextResponse.json(
         { ok: false, error: "PIN incorrect. Réessayez." },

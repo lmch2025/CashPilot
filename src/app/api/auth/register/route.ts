@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const pinHash = await hashPin(pin);
+    const pinHash = hashPin(pin);
     const user = await db.user.create({
       data: {
         phone: normalized,

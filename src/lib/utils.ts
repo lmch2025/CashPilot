@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { createHash } from "crypto";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -23,22 +24,20 @@ export function formatXAFWithSymbol(amount: number): string {
 }
 
 /**
- * Hash simple pour le PIN (démonstration seulement).
- * En production, utiliser bcrypt/argon2 côté serveur.
+ * Hash le PIN avec SHA-256 + salt (synchrone, utilise Node.js crypto).
+ * Compatible avec tous les environnements (dev, Vercel serverless, etc.).
  */
-export async function hashPin(pin: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(`cashpilot-salt::${pin}`);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+export function hashPin(pin: string): string {
+  return createHash("sha256")
+    .update(`cashpilot-salt::${pin}`)
+    .digest("hex");
 }
 
 /**
  * Vérifie un PIN contre son hash
  */
-export async function verifyPin(pin: string, hash: string): Promise<boolean> {
-  const computed = await hashPin(pin);
+export function verifyPin(pin: string, hash: string): boolean {
+  const computed = hashPin(pin);
   return computed === hash;
 }
 
