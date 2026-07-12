@@ -1571,3 +1571,231 @@ Next Actions (suggestions for downstream tasks):
 - Wire the stat sheets to real fetches if more granular data is needed (currently derives from recentTransactions + gainsHistory which are already in the dashboard payload).
 - Consider adding a small haptic via the Vibration API on pull-to-refresh release for supported devices.
 - The pre-existing duplicate-key TS error in dictionaries.ts (opportunities.stats.executed at lines 319/376 FR and 1008/1065 EN) is unrelated to this task and should be cleaned up in a separate pass.
+
+---
+Task ID: 12 (Phase 1)
+Agent: Main (Z.ai Code)
+Task: Foundation for opportunity automation system (scanner + API integration + cron-job.org + dry-run)
+
+Work Log:
+- Updated prisma/schema.prisma: added 3 new models:
+  * MarketData: stores real-time prices from APIs (platform, pair, price, bid, ask, volume, rawData)
+  * DetectedOpportunity: opportunities detected by scanner (type, automationLevel, buyPlatform, sellPlatform, buyPrice, sellPrice, spreadPercent, estimatedGain, approvalStatus, dryRun, riskLevel, etc.)
+  * ScanLog: logs each scan execution (trigger, status, platformsScanned, opportunitiesFound, duration, error)
+- Updated src/lib/config-defaults.ts: added AutomationConfig interface + DEFAULT_AUTOMATION_CONFIG
+  * dryRun (true by default = simulation only)
+  * scannerEnabled (false by default, admin activates)
+  * platforms: binance, bybit, yellowcard, noones, polymarket, kalshi, mintos, betfair
+  * arbitrageTypes: p2pArbitrage, interPlatform, triangular, basisTrade, staking, fundingRate, predictionInternal, predictionInter, p2pLending, sportsBetting
+  * minSpreadPercent, minEstimatedGain, maxRiskLevel, capitalReference
+  * autoApproveLowRisk, autoApproveSpreadMin
+  * binanceApiKey/Secret, bybitApiKey/Secret (empty = public endpoints)
+  * scraperApiKey, useScraperForGeoblocked (ScraperApi for geo-blocked platforms)
+  * cronJobOrgUrl, cronJobOrgKey (for cron-job.org webhook authentication)
+- Updated src/lib/config-server.ts: added getAutomationConfig, setAutomationConfig, included automation in getAllConfigs
+- Updated src/lib/types.ts: added "scanner" to AdminSection
+- Updated src/components/admin/admin-shell.tsx: added "Scanner d'opportunités" nav item (Radar icon), section title, renderSection case
+- Created placeholder src/components/admin/admin-scanner-view.tsx (subagent will build full version)
+
+NOTE: Neon password was invalidated by Neon security (credentials were exposed on GitHub). User must reset password in Neon Console and provide new DATABASE_URL. Schema push to Neon pending.
+
+Stage Summary:
+- Foundation complete. 3 new Prisma models (MarketData, DetectedOpportunity, ScanLog) ready for Neon push.
+- AutomationConfig with 14 arbitrage types from the implementation document, platform toggles, API keys, ScraperApi support, cron-job.org integration.
+- Dry-run mode is the DEFAULT (safe — no real trades until admin explicitly disables).
+- Ready to dispatch 2 parallel subagents for: backend (market data fetchers + scanner + cron webhook), frontend (admin scanner UI)
+
+---
+Task ID: 2-b-scan
+Agent: Subagent (Frontend — Admin Scanner UI)
+Task: Replace placeholder admin-scanner-view.tsx with full implementation — 4 tabs (Détection / Configuration / Données marché / Logs)
+
+Work Log:
+- Read context: worklog.md (Task 12 — AutomationConfig + 3 new Prisma models), src/lib/config-defaults.ts (AutomationConfig interface), src/components/admin/config-primitives.tsx, admin-distribution-config.tsx, admin-users-view.tsx (pattern reference)
+- Replaced src/components/admin/admin-scanner-view.tsx (was a 20-line Loader2 placeholder) with a 2100+ line implementation
+- File is "use client" and uses sonner toast, framer-motion, shadcn/ui, lucide-react — all per CashPilot conventions
+
+Implementation details (4 tabs):
+
+TAB 1 — Détection (DetectionTab):
+  - Top action bar: "Scanner maintenant" button (POST /api/admin/scanner/scan with trigger:manual), live loading state, last-scan info ("Dernier scan: il y a X min — N opportunités trouvées")
+  - Filter bar: status segmented control (Tous/En attente/Approuvées/Rejetées/Expirées), automation level Select (Tous/Auto 100%/Semi-auto/Manuel), type Select (10 types)
+  - Dry-run / Réel mode badge inline showing current execution mode
+  - Auto-refresh every 30 seconds via setInterval (silent reload, no toast spam)
+  - Opportunity cards in responsive 1-col / 2-col grid with:
+    * Color-coded Type badge, Automation badge (green/gold/gray), Risk badge (green/gold/red), Status badge, Mode badge (Dry-run gold / Réel green)
+    * Buy/Sell box: "ACHAT: Binance @ 590 XAF → VENTE: Bybit @ 610 XAF" with directional arrow
+    * Spread + estimated gain KPIs
+    * Capital required + live countdown timer (ticks every second, turns red <2min, "Expirée" when expired)
+    * Expandable details: description, capital, raw JSON data
+    * Approve (green check) / Reject (red X) action buttons with loading state — only shown when status=pending
+    * Optimistic local update + reload on approve/reject
+  - Pagination (max 5 visible pages) when totalPages > 1
+  - Empty state with empty-state CTA: "Lancez un scan pour détecter des opportunités d'arbitrage en temps réel."
+
+TAB 2 — Configuration (ConfigTab):
+  - Uses ConfigSection / FormField / ToggleField / NumberField / SliderField / ConfigActionBar primitives from config-primitives.tsx
+  - 8 sections:
+    1. Mode de fonctionnement: BIG prominent dry-run toggle (gold when DRY-RUN, green when RÉEL) with descriptive text, scanner enabled toggle, scan interval NumberField
+    2. Plateformes surveillées: 8 platform toggle cards with emojis (Binance, Bybit, Yellow Card, Noones, Polymarket, Kalshi, Mintos, Betfair)
+    3. Types d'arbitrage: 10 toggle rows with labels + descriptions (#1 P2P through #14 sports betting)
+    4. Seuils de détection: minSpreadPercent slider (0-10%, step 0.1), minEstimatedGain NumberField, maxRiskLevel Select (Faible/Moyen/Élevé), capitalReference NumberField
+    5. Auto-approbation: autoApproveLowRisk toggle + autoApproveSpreadMin NumberField
+    6. API Keys: Binance key+secret, Bybit key+secret (all password inputs with "Laissez vide pour endpoints publics" placeholder)
+    7. ScraperApi: scraperApiKey password input + useScraperForGeoblocked toggle + help text
+    8. cron-job.org: read-only webhook URL (built dynamically from cronJobOrgUrl + cronJobOrgKey) with "Copier" button, editable secret key input, instructions block
+  - Sticky save bar (ConfigActionBar) with Save + Reset + dirty indicator dot
+  - AlertDialog confirmation when switching dry-run true→false ("Passer en mode réel ?"): warns that approved opportunities will be executed with real capital; Cancel reverts, Confirm proceeds
+  - GET config on mount, PUT config on save, falls back to DEFAULT_AUTOMATION_CONFIG if backend not ready (so form stays usable during parallel backend dev)
+  - buildCronUrl helper: combines cronJobOrgUrl (default https://cash-pilot-wheat.vercel.app/api/cron/scan) + key=secret
+
+TAB 3 — Données marché (MarketDataTab):
+  - GET /api/admin/scanner/market-data on mount + Refresh button
+  - Responsive 1/2/3-col grid of price cards:
+    * Platform + pair header, 24h change badge (green up / red down with TrendingUp/TrendingDown icon)
+    * Big animated price (motion key=price → re-animates on update)
+    * Bid/Ask/Volume24h sub-cards when available
+    * Last updated relative time
+  - Empty state: "Aucune donnée marché disponible — Lancez un scan pour récupérer les prix"
+
+TAB 4 — Logs (LogsTab):
+  - GET /api/admin/scanner/logs?page&limit=20
+  - Table with columns: Date/heure | Déclencheur (TriggerBadge: Cron blue / Manuel gray / Admin green) | Statut (ScanStatusBadge: Succès green / Partiel gold / Erreur red) | Plateformes (chips, max 3 + "+N") | Opp. (count) | Durée (formatted ms/s) | Erreur (line-clamp-2 red)
+  - Pagination at bottom (max 5 visible pages)
+  - Refresh button + loading state
+  - Empty state when no logs
+
+Shared / cross-cutting:
+  - Main AdminScannerView:
+    * ConfigHeader with Radar icon
+    * Mode summary bar at top: ModeBadge + descriptive text + scanner-active status indicator (pinging green dot when scannerEnabled)
+    * Custom segmented TabBar (Détection / Configuration / Données marché / Logs) with active-state motion
+    * AnimatePresence transitions between tabs (opacity + y)
+  - GET config on mount to display the correct Dry-run/Réel badge in summary bar + on opportunity cards
+  - handleConfigSaved callback propagates saved config to parent + bumps configVersion to force Détection tab to re-fetch opportunities (in case thresholds changed what's visible)
+  - All French text (per CashPilot brand), dark green primary + warm gold accent throughout
+  - All errors surfaced via sonner toast; all actions confirmed via toast (scan triggered, approved, rejected, saved)
+  - Defensive JSON access (json.ok pattern) — backend being built in parallel, view stays usable when API returns 404/error
+
+Verification:
+  - TypeScript: `npx tsc --noEmit` — 0 errors in admin-scanner-view.tsx (only pre-existing errors in unrelated files: examples/websocket, skills/, src/lib/market-data/binance.ts & bybit.ts which are being built by the parallel backend subagent)
+  - ESLint: `npx eslint src/components/admin/admin-scanner-view.tsx` — 0 errors, 0 warnings
+  - All 27 imported lucide-react icons verified to exist
+  - All shadcn/ui imports (Button, Input, Switch, Badge, AlertDialog*, Select*, Table*) verified
+  - All config-primitives imports (ConfigSection, FormField, ToggleField, NumberField, SliderField, ConfigActionBar, ConfigHeader) verified
+  - formatXAF + formatDateTime from @/lib/utils verified
+
+Next actions:
+  - Backend subagent: implement the 6 API routes the UI calls:
+    * GET/PUT /api/admin/scanner/config
+    * POST /api/admin/scanner/scan
+    * GET /api/admin/scanner/opportunities (with status, level, type, page, limit query params)
+    * PATCH /api/admin/scanner/opportunities/[id] with action:approve|reject
+    * GET /api/admin/scanner/logs
+    * GET /api/admin/scanner/market-data
+  - Verify the Opportunity/ScanLog/MarketData JSON shape returned by the backend matches what the UI expects (see types at top of admin-scanner-view.tsx). Suggested fields:
+    Opportunity: id, type, automationLevel (full_auto|semi_auto|manual), riskLevel (low|medium|high), status (pending|approved|rejected|expired), buyPlatform, buyPrice, sellPlatform, sellPrice, spreadPercent, estimatedGain, capitalRequired, validUntil (ISO), description?, raw?, createdAt
+    ScanLog: id, createdAt, trigger (cron|manual|admin), status (success|error|partial), platformsScanned[], opportunitiesFound, durationMs, errorMessage?
+    MarketData: id, platform, pair, price, bid?, ask?, volume24h?, change24h?, lastUpdated
+  - End-to-end test once backend is live: switch dry-run off (confirm dialog), trigger manual scan, approve an opportunity, verify it disappears from pending list
+  - Optional polish: add real-time polling on the MarketData tab (currently manual refresh only)
+
+Stage Summary:
+- Admin scanner UI complete and verified. All 4 tabs implemented with full interactivity, defensive API consumption, brand-consistent styling, and accessible French UX. Ready to integrate with the backend API being built in parallel.
+
+---
+Task ID: 2-a-scan
+Agent: Backend subagent (Z.ai Code)
+Task: Backend for opportunity automation — market data fetchers + scanner + cron webhook
+
+Work Log:
+- Read Task 12 foundation: AutomationConfig (DEFAULT_AUTOMATION_CONFIG), 3 new Prisma models (MarketData, DetectedOpportunity, ScanLog), getAutomationConfig/setAutomationConfig helpers.
+- Regenerated Prisma client (npx prisma generate) so db.marketData / db.detectedOpportunity / db.scanLog are typed.
+
+Created 11 files:
+
+1. src/lib/market-data/types.ts
+   - MarketPrice { platform, pair, price, bid?, ask?, volume24h? }
+   - P2PPrice { platform, asset, fiat, tradeType BUY|SELL, price, availableAmount?, ... }
+   - FundingRate { platform, symbol, fundingRate, markPrice, nextFundingTime? }
+   - MarketSnapshot { spotPrices, p2pPrices, fundingRates, fetchedAt, errors[] }
+
+2. src/lib/market-data/binance.ts
+   - fetchBinanceSpotPrices(config): GET api.binance.com/api/v3/ticker/24hr for BTCUSDT/ETHUSDT/TRXUSDT/SOLUSDT/USDCUSDT — parallel Promise.allSettled (one failure doesn't block others). Persists each as MarketData.
+   - fetchBinanceP2PPrices(asset, fiat, config): POST p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search with { asset:"USDT", fiat:"XAF", page:1, rows:5, tradeType:"BUY"|"SELL" } — 2 parallel calls. Returns top-3 quotes per side.
+   - fetchBinanceFundingRates(config): GET fapi.binance.com/fapi/v1/premiumIndex for BTCUSDT/ETHUSDT.
+   - All fetches use AbortController (8s timeout), ScraperApi wrapper if config.useScraperForGeoblocked && config.scraperApiKey, never throw (errors caught → [] returned).
+
+3. src/lib/market-data/bybit.ts
+   - fetchBybitSpotPrices(config): GET api.bybit.com/v5/market/tickers?category=spot&symbol=... for BTCUSDT/ETHUSDT/SOLUSDT.
+   - fetchBybitP2PPrices(config, asset, fiat): POST api2.bybit.com/fiat/otc/item/online with side:"0"|"1" for BUY/SELL.
+   - Same defensive patterns: AbortController, ScraperApi wrap, best-effort persist, never throw.
+
+4. src/lib/scanner/detector.ts (751 lines)
+   - scanMarkets(trigger: "cron"|"manual"|"admin"): Promise<ScanResult> — entry point, NEVER throws (top-level try/catch returns ScanResult with success=false + error).
+   - Pipeline:
+     a) Load AutomationConfig. If !scannerEnabled → return early (success:true, found:0) + write ScanLog.
+     b) fetchAllMarketData(config): parallel Promise.allSettled for binance (spot+P2P+funding) and bybit (spot+P2P). Errors collected, platforms scanned tracked.
+     c) detectP2PArbitrage: same platform, BUY vs SELL quotes — buy at SELL price, sell at BUY price. automationLevel=full_auto. risk: >2%=low, 1-2%=medium, <1%=high.
+     d) detectInterPlatform: same pair on Binance vs Bybit spot — buy cheapest, sell most expensive. full_auto.
+     e) detectTriangular: 3 cycles (USDT→BTC→ETH→USDT, USDT→ETH→BTC→USDT, USDT→SOL→BTC→USDT). Product of conversion rates; if >1, spread%. semi_auto.
+     f) detectFundingRate: |fundingRate| > 0.0005 → cash & carry, daily% estimated. semi_auto.
+     g) Filters: minSpreadPercent, minEstimatedGain, maxRiskLevel.
+     h) Create DetectedOpportunity (dryRun = config.dryRun, validUntil = now+15min, expiresAt = validUntil).
+     i) Auto-approve if: config.autoApproveLowRisk && riskLevel="low" && spread >= config.autoApproveSpreadMin → set approvalStatus="approved", approvedAt, approvedBy="system".
+     j) distributeToAlertsUsers(raw, validUntil): bulk createMany Opportunity records for ALL alerts-mode users with active subscription + status=active. Converts prices to int XAF (XAF pairs direct, USD pairs *600). Fallback to one-by-one createMany on failure.
+     k) writeScanLog: trigger, status (success|partial|error), platformsScanned (JSON), counts, duration (ms), error.
+   - Exported: scanMarkets, ScanResult, DetectedRaw, distributeToAlertsUsers.
+
+5. src/app/api/cron/scan/route.ts
+   - GET & POST handlers (cron-job.org can use either).
+   - Auth: ?key=SECRET must match config.cronJobOrgKey (default "cashpilot-cron-secret-2025"). 401 if invalid.
+   - Calls scanMarkets("cron"). Returns { ok:true, result }.
+
+6. src/app/api/admin/scanner/scan/route.ts
+   - POST handler. Body optional { trigger?: "manual"|"admin" }. Defaults to "manual".
+   - Calls scanMarkets. No key auth (admin already authenticated via existing admin shell).
+
+7. src/app/api/admin/scanner/opportunities/route.ts
+   - GET with filters: ?status=pending&level=full_auto&type=p2p_arbitrage&risk=low&page=1&limit=20 (max 100).
+   - Returns paginated list: { ok:true, opportunities, total, page, totalPages }.
+
+8. src/app/api/admin/scanner/opportunities/[id]/route.ts
+   - PATCH { action: "approve"|"reject" }. Validates action + opportunity exists + is pending. Updates approvalStatus, approvedAt, approvedBy="admin".
+   - On approve: calls distributeToAlertsUsers(raw, validUntil) — creates Opportunity records for all alerts-mode users with active subscription. Returns { ok, opportunity, distributedToUsers }.
+   - GET single opportunity (for detail view).
+   - Next.js 16 pattern: params: Promise<{ id: string }> + await params.
+
+9. src/app/api/admin/scanner/config/route.ts
+   - GET → { ok:true, config: AutomationConfig } via getAutomationConfig.
+   - PUT { config: Partial<AutomationConfig> } → deep-merges with current (platforms/arbitrageTypes merged sub-field by sub-field), validates/coerces booleans + numbers + maxRiskLevel enum, then setAutomationConfig. Returns { ok:true, config }.
+
+10. src/app/api/admin/scanner/logs/route.ts
+    - GET ?page=1&limit=20&status=success|error|partial → paginated ScanLog list, parsed platformsScanned JSON, ISO dates.
+
+11. src/app/api/admin/scanner/market-data/route.ts
+    - GET ?platform=binance&pair=BTC/USDT&limit=50 (max 200) → latest MarketData rows for the admin dashboard live prices view.
+
+Key patterns respected:
+- All fetches: AbortController 8s timeout, ScraperApi wrap when configured, never throw.
+- All DB writes: best-effort (errors logged, not propagated).
+- Scanner: top-level try/catch — always returns ScanResult, never throws.
+- Dry-run is DEFAULT (config.dryRun=true initially).
+- Opportunities expire (validUntil = now + 15 minutes).
+- Approve flow distributes to alerts-mode users via distributeToAlertsUsers helper (createMany → fallback one-by-one).
+- Descriptions in French, formatXAF used for amounts.
+- Next.js 16 dynamic routes: params: Promise<{ id: string }> + await params.
+
+Verification:
+- npx tsc --noEmit → 0 errors in new files (other unrelated examples/skills errors pre-existing).
+- npx eslint src/lib/market-data/ src/lib/scanner/ src/app/api/cron/ src/app/api/admin/scanner/ --max-warnings=0 → 0 errors, 0 warnings.
+- Neon DB push still pending (schema has models, code compiles, runtime blocked on user resetting Neon password).
+
+Stage Summary:
+- 11 new files implementing the full backend pipeline: fetch → detect → classify → store → approve → distribute.
+- 4 arbitrage types: p2p_arbitrage (full_auto), inter_platform (full_auto), triangular (semi_auto), funding_rate (semi_auto).
+- Risk levels: >2%=low, 1-2%=medium, <1%=high. Filtered by config.maxRiskLevel.
+- Auto-approval conditional on config.autoApproveLowRisk && low risk && spread >= autoApproveSpreadMin.
+- Cron webhook at /api/cron/scan (GET+POST) with key-based auth (key="cashpilot-cron-secret-2025" by default).
+- Admin endpoints under /api/admin/scanner/* for manual scan, opportunities list/approve, config, logs, market-data.
+- All files TypeScript-clean, ESLint-clean. Ready for integration with admin UI subagent's work.

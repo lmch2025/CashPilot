@@ -15,6 +15,7 @@ import {
   Shield,
   Construction,
   PieChart,
+  Radar,
 } from "lucide-react";
 import { useCashPilotStore } from "@/lib/store";
 import { CashPilotLogo } from "@/components/cashpilot/logo";
@@ -32,6 +33,7 @@ import { AdminTransactionsView } from "@/components/admin/admin-transactions-vie
 import { AdminRobotConfig } from "@/components/admin/admin-robot-config";
 import { AdminDistributionConfig } from "@/components/admin/admin-distribution-config";
 import { AdminOpportunitiesConfig } from "@/components/admin/admin-opportunities-config";
+import { AdminScannerView } from "@/components/admin/admin-scanner-view";
 import { AdminPlansConfig } from "@/components/admin/admin-plans-config";
 import { AdminSettingsView } from "@/components/admin/admin-settings-view";
 
@@ -49,6 +51,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "transactions", label: "Transactions", icon: Receipt },
   { id: "robot", label: "Robot — mode géré", icon: Bot },
   { id: "distribution", label: "Distribution des gains", icon: PieChart },
+  { id: "scanner", label: "Scanner d'opportunités", icon: Radar },
   { id: "opportunities", label: "Opportunités — mode alerte", icon: Bell },
   { id: "plans", label: "Abonnements", icon: Crown },
   { id: "settings", label: "Paramètres globaux", icon: Settings },
@@ -60,6 +63,7 @@ const SECTION_TITLES: Record<AdminSection, string> = {
   transactions: "Transactions",
   robot: "Robot — mode géré",
   distribution: "Distribution des gains",
+  scanner: "Scanner d'opportunités",
   opportunities: "Opportunités — mode alerte",
   plans: "Abonnements",
   settings: "Paramètres globaux",
@@ -185,6 +189,8 @@ function renderSection(section: AdminSection): ReactNode {
       return <AdminDistributionConfig />;
     case "opportunities":
       return <AdminOpportunitiesConfig />;
+    case "scanner":
+      return <AdminScannerView />;
     case "plans":
       return <AdminPlansConfig />;
     case "settings":

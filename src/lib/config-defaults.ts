@@ -272,6 +272,115 @@ export const CONFIG_KEYS = {
   admin: "admin",
   distribution: "distribution",
   distributionState: "distribution-state",
+  automation: "automation",
 } as const;
 
 export type ConfigKey = (typeof CONFIG_KEYS)[keyof typeof CONFIG_KEYS];
+
+// === Automation config (opportunity scanner + API integration) ===
+
+export interface AutomationConfig {
+  // Mode global
+  dryRun: boolean; // true = simulation (aucun trade réel), false = exécution réelle
+  scannerEnabled: boolean; // active/désactive le scanner
+  scanIntervalMin: number; // intervalle entre les scans (minutes) — pour cron-job.org
+
+  // Plateformes activées
+  platforms: {
+    binance: boolean;
+    bybit: boolean;
+    yellowcard: boolean;
+    noones: boolean;
+    polymarket: boolean;
+    kalshi: boolean;
+    mintos: boolean;
+    betfair: boolean;
+  };
+
+  // Types d'arbitrage activés
+  arbitrageTypes: {
+    p2pArbitrage: boolean;       // #1 USDT/FCFA P2P
+    interPlatform: boolean;      // #2 inter-plateforme USDT
+    triangular: boolean;         // #3 triangulaire crypto
+    basisTrade: boolean;         // #4 spot vs futures
+    staking: boolean;            // #5 staking rate
+    fundingRate: boolean;        // #8 funding rate arbitrage
+    predictionInternal: boolean; // #11 Polymarket interne
+    predictionInter: boolean;    // #12 Polymarket vs Kalshi
+    p2pLending: boolean;         // #13 Mintos
+    sportsBetting: boolean;      // #14 Betfair/Smarkets
+  };
+
+  // Seuils de détection
+  minSpreadPercent: number;      // spread minimum pour détecter une opportunité (ex: 0.5%)
+  minEstimatedGain: number;      // gain minimum en XAF (ex: 500)
+  maxRiskLevel: string;          // niveau de risque maximum ("low" | "medium" | "high")
+  capitalReference: number;      // capital de référence pour calculer le gain (ex: 50000 XAF)
+
+  // Auto-approbation
+  autoApproveLowRisk: boolean;   // auto-approuver les opportunités low risk
+  autoApproveSpreadMin: number;  // spread minimum pour auto-approbation (ex: 2%)
+
+  // API keys (vide = utilise les endpoints publics)
+  binanceApiKey: string;
+  binanceApiSecret: string;
+  bybitApiKey: string;
+  bybitApiSecret: string;
+
+  // ScraperApi (pour contourner les restrictions géographiques)
+  scraperApiKey: string;         // clé ScraperApi
+  useScraperForGeoblocked: boolean; // utiliser ScraperApi pour les plateformes géo-bloquées
+
+  // cron-job.org
+  cronJobOrgUrl: string;         // URL du webhook (ex: https://cash-pilot.vercel.app/api/cron/scan)
+  cronJobOrgKey: string;         // clé secrète pour authentifier le cron
+}
+
+export const DEFAULT_AUTOMATION_CONFIG: AutomationConfig = {
+  dryRun: true, // DRY-RUN par défaut — simulation seulement
+  scannerEnabled: false, // désactivé par défaut, l'admin l'active
+  scanIntervalMin: 5, // toutes les 5 minutes
+
+  platforms: {
+    binance: true,
+    bybit: true,
+    yellowcard: false, // pas d'API publique directe
+    noones: false,
+    polymarket: false,
+    kalshi: false,
+    mintos: false,
+    betfair: false,
+  },
+
+  arbitrageTypes: {
+    p2pArbitrage: true,
+    interPlatform: true,
+    triangular: true,
+    basisTrade: false, // désactivé par défaut (niveau intermédiaire)
+    staking: false,
+    fundingRate: false,
+    predictionInternal: false,
+    predictionInter: false,
+    p2pLending: false,
+    sportsBetting: false,
+  },
+
+  minSpreadPercent: 0.5,
+  minEstimatedGain: 500,
+  maxRiskLevel: "medium",
+  capitalReference: 50000,
+
+  autoApproveLowRisk: false, // l'admin doit approuver manuellement par défaut
+  autoApproveSpreadMin: 3,
+
+  binanceApiKey: "",
+  binanceApiSecret: "",
+  bybitApiKey: "",
+  bybitApiSecret: "",
+
+  scraperApiKey: "",
+  useScraperForGeoblocked: true,
+
+  cronJobOrgUrl: "",
+  cronJobOrgKey: "cashpilot-cron-secret-2025",
+};

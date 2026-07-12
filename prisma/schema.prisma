@@ -88,10 +88,79 @@ model Opportunity {
   @@index([validUntil])
 }
 
-// Nouveau: Configuration clé-valeur (pour l'admin)
-// Stocke les configs du robot, des opportunités, des plans, et globales
+// Configuration clé-valeur (pour l'admin)
 model Config {
-  key       String   @id // "robot" | "opportunities" | "global" | "plans" | "admin"
+  key       String   @id
   value     String   // JSON string
   updatedAt DateTime @updatedAt
+}
+
+// === Système d'automatisation des opportunités ===
+
+// Prix de marché en temps réel (fetch depuis APIs Binance, Bybit, etc.)
+model MarketData {
+  id          String   @id @default(cuid())
+  platform    String   // "binance" | "bybit" | "yellowcard" | "noones" | "polymarket" | etc.
+  pair        String   // "USDT/XAF" | "BTC/USDT" | "ETH/USDT" | etc.
+  price       Float    // prix actuel
+  bid         Float?   // meilleur prix d'achat
+  ask         Float?   // meilleur prix de vente
+  volume24h   Float?   // volume 24h
+  rawData     String?  // JSON complet de la réponse API (pour debug)
+  fetchedAt   DateTime @default(now())
+
+  @@index([platform, pair])
+  @@index([fetchedAt])
+}
+
+// Opportunités détectées par le scanner (avant approbation admin)
+model DetectedOpportunity {
+  id              String   @id @default(cuid())
+  // Identification
+  type            String   // "p2p_arbitrage" | "inter_platform" | "triangular" | "funding_rate" | "staking" | "prediction" | "manual"
+  automationLevel String   @default("semi_auto") // "full_auto" | "semi_auto" | "manual"
+  // Détails du trade
+  buyPlatform     String   // plateforme d'achat
+  sellPlatform    String   // plateforme de vente
+  pair            String   // paire tradée
+  buyPrice        Float    // prix d'achat
+  sellPrice       Float    // prix de vente
+  spreadPercent   Float    // spread en %
+  estimatedGain   Float    // gain estimé en XAF (pour capital de référence)
+  estimatedGainPercent Float // gain en %
+  capitalRequired Float    // capital minimum requis
+  // État
+  approvalStatus  String   @default("pending") // "pending" | "approved" | "rejected" | "expired"
+  dryRun          Boolean  @default(true) // true = simulation, false = exécution réelle
+  validUntil      DateTime // date d'expiration
+  // Métadonnées
+  riskLevel       String   @default("low") // "low" | "medium" | "high"
+  description     String   // description humaine
+  rawData         String?  // JSON complet (pour debug)
+  // Dates
+  detectedAt      DateTime @default(now())
+  approvedAt      DateTime?
+  approvedBy      String?  // admin userId (pour audit)
+  expiresAt       DateTime?
+
+  @@index([approvalStatus])
+  @@index([automationLevel])
+  @@index([detectedAt])
+  @@index([type])
+}
+
+// Log des scans (pour monitoring et cron-job.org)
+model ScanLog {
+  id              String   @id @default(cuid())
+  trigger         String   // "cron" | "manual" | "admin"
+  status          String   // "success" | "error" | "partial"
+  platformsScanned String  // JSON array of platforms
+  opportunitiesFound Int   @default(0)
+  opportunitiesApproved Int @default(0)
+  duration        Int      @default(0) // en millisecondes
+  error           String?  // message d'erreur si status=error
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([status])
 }

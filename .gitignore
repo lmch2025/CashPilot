@@ -63,3 +63,5 @@ screenshot-*.png
 tool-results/
 .zscripts/
 upload/
+.env
+upload/

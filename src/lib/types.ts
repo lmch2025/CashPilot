@@ -140,6 +140,7 @@ export type AdminSection =
   | "robot"
   | "distribution"
   | "opportunities"
+  | "scanner"
   | "plans"
   | "settings";
 

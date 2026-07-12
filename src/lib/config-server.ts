@@ -18,6 +18,8 @@ import {
   type AdminConfig,
   type DistributionConfig,
   type DistributionState,
+  DEFAULT_AUTOMATION_CONFIG,
+  type AutomationConfig,
 } from "@/lib/config-defaults";
 
 /**
@@ -116,17 +118,26 @@ export async function setDistributionState(state: DistributionState): Promise<vo
   await setConfig(CONFIG_KEYS.distributionState, state);
 }
 
+export async function getAutomationConfig(): Promise<AutomationConfig> {
+  return getConfig(CONFIG_KEYS.automation, DEFAULT_AUTOMATION_CONFIG);
+}
+
+export async function setAutomationConfig(cfg: AutomationConfig): Promise<void> {
+  await setConfig(CONFIG_KEYS.automation, cfg);
+}
+
 /**
  * Get all configs at once (for the admin dashboard).
  */
 export async function getAllConfigs() {
-  const [robot, opportunities, global, plans, admin, distribution] = await Promise.all([
+  const [robot, opportunities, global, plans, admin, distribution, automation] = await Promise.all([
     getRobotConfig(),
     getOpportunitiesConfig(),
     getGlobalConfig(),
     getPlansConfig(),
     getAdminConfig(),
     getDistributionConfig(),
+    getAutomationConfig(),
   ]);
-  return { robot, opportunities, global, plans, admin, distribution };
+  return { robot, opportunities, global, plans, admin, distribution, automation };
 }
