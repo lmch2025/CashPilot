@@ -1,15 +1,9 @@
 // CashPilot - Admin: liste des opportunités détectées
 // GET /api/admin/scanner/opportunities?status=pending&level=full_auto&type=p2p_arbitrage&page=1&limit=20
-//
-// Retourne les DetectedOpportunity paginées + filtrées.
-// Filtres disponibles (tous optionnels):
-//   - status: "pending" | "approved" | "rejected" | "expired"
-//   - level:  "full_auto" | "semi_auto" | "manual"
-//   - type:   "p2p_arbitrage" | "inter_platform" | "triangular" | "funding_rate" | ...
-//   - risk:   "low" | "medium" | "high"
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { Prisma } from "@prisma/client";
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 20;
@@ -37,12 +31,20 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       Math.max(1, parseInt(params.get("limit") ?? String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT)
     );
 
-    // Build where clause
-    const where: Record<string, string> = {};
-    if (status && VALID_STATUSES.has(status)) where.approvalStatus = status;
-    if (level && VALID_LEVELS.has(level)) where.automationLevel = level;
-    if (type) where.type = type;
-    if (risk && VALID_RISKS.has(risk)) where.riskLevel = risk;
+    // Build where clause with proper Prisma typing
+    const where: Prisma.DetectedOpportunityWhereInput = {};
+    if (status && VALID_STATUSES.has(status)) {
+      where.approvalStatus = status;
+    }
+    if (level && VALID_LEVELS.has(level)) {
+      where.automationLevel = level;
+    }
+    if (type && type !== "all") {
+      where.type = type;
+    }
+    if (risk && VALID_RISKS.has(risk)) {
+      where.riskLevel = risk;
+    }
 
     const [total, rows] = await Promise.all([
       db.detectedOpportunity.count({ where }),
@@ -80,6 +82,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         approvedAt: o.approvedAt ? o.approvedAt.toISOString() : null,
         approvedBy: o.approvedBy,
         expiresAt: o.expiresAt ? o.expiresAt.toISOString() : null,
+        raw: o.rawData,
       })),
       total,
       page,
@@ -88,7 +91,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   } catch (err) {
     console.error("[admin/scanner/opportunities GET] error:", err);
     return NextResponse.json(
-      { ok: false, error: "Erreur serveur." },
+      {
+        ok: false,
+        error: "Erreur serveur.",
+        detail: err instanceof Error ? err.message : "Erreur inconnue",
+      },
       { status: 500 }
     );
   }
