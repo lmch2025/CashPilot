@@ -190,18 +190,31 @@ export async function scanMarkets(
 
     for (const raw of detected) {
       try {
-        // Apply filters — NO max spread restriction (all opportunities welcome)
-        if (raw.spreadPercent < config.minSpreadPercent) continue;
-        if (raw.estimatedGain < config.minEstimatedGain) continue;
-        if (RISK_RANK[raw.riskLevel] > maxRiskRank) continue;
+        // Déterminer si l'opportunité est "actionnable" ou juste "informatif"
+        // - Actionnable: spread >= minSpreadPercent ET gain >= minEstimatedGain ET risk <= maxRiskLevel
+        // - Informatif: stocké pour visibilité, mais le robot l'ignore (spread négatif, trop faible, etc.)
+        const isActionnable =
+          raw.spreadPercent >= config.minSpreadPercent &&
+          raw.estimatedGain >= config.minEstimatedGain &&
+          RISK_RANK[raw.riskLevel] <= maxRiskRank;
 
-        // Auto-approve?
+        // En dry-run, on stocke TOUTES les opportunités (même négatives) pour visibilité
+        // En mode réel, on ne stocke que les actionnables
+        if (!config.dryRun && !isActionnable) continue;
+
+        // Auto-approve? (seulement pour les actionnables)
         const autoApprove =
+          isActionnable &&
           config.autoApproveLowRisk &&
           raw.riskLevel === "low" &&
           raw.spreadPercent >= config.autoApproveSpreadMin;
 
-        const approvalStatus = autoApprove ? "approved" : "pending";
+        // Statut: approved (auto), pending (actionnable, attend admin), ou info_only (informatif seulement)
+        const approvalStatus = !isActionnable
+          ? "info_only"
+          : autoApprove
+          ? "approved"
+          : "pending";
         const approvedAt = autoApprove ? now : null;
         const approvedBy = autoApprove ? "system" : null;
 

@@ -105,7 +105,7 @@ import {
 type TabId = "detection" | "config" | "market" | "logs";
 type AutomationLevel = "full_auto" | "semi_auto" | "manual";
 type RiskLevel = "low" | "medium" | "high";
-type OpportunityStatus = "pending" | "approved" | "rejected" | "expired";
+type OpportunityStatus = "pending" | "approved" | "rejected" | "expired" | "info_only";
 type ScanTrigger = "cron" | "manual" | "admin";
 type ScanStatus = "success" | "error" | "partial";
 
@@ -265,6 +265,7 @@ const ARBITRAGE_TYPES: {
 const STATUS_FILTERS: { v: OpportunityStatus | "all"; label: string }[] = [
   { v: "all", label: "Tous" },
   { v: "pending", label: "En attente" },
+  { v: "info_only", label: "Informatif" },
   { v: "approved", label: "Approuvées" },
   { v: "rejected", label: "Rejetées" },
   { v: "expired", label: "Expirées" },
@@ -404,6 +405,10 @@ function StatusBadge({ status }: { status: OpportunityStatus }) {
     pending: {
       label: "En attente",
       cls: "bg-[var(--brand-gold)]/15 text-[var(--brand-gold-dark)] border-[var(--brand-gold)]/40",
+    },
+    info_only: {
+      label: "Informatif",
+      cls: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
     },
     approved: { label: "Approuvée", cls: "bg-primary/10 text-primary border-primary/20" },
     rejected: { label: "Rejetée", cls: "bg-destructive/10 text-destructive border-destructive/20" },
@@ -740,7 +745,7 @@ function DetectionTab({
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<OpportunityStatus | "all">("pending");
+  const [statusFilter, setStatusFilter] = useState<OpportunityStatus | "all">("all");
   const [levelFilter, setLevelFilter] = useState<AutomationLevel | "all">("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [scanning, setScanning] = useState(false);
