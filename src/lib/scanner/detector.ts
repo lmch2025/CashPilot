@@ -165,8 +165,11 @@ export async function scanMarkets(
       console.error("[scanner] detectInterPlatform error:", e);
     }
     try {
-      if (config.arbitrageTypes.triangular) {
-        detected.push(...detectTriangular(snapshot, config));
+      // Triangular always runs in dry-run for visibility, even if disabled in config
+      if (config.arbitrageTypes.triangular || config.dryRun) {
+        const triResults = detectTriangular(snapshot, config);
+        console.log(`[scanner] Triangular detector returned ${triResults.length} opportunities`);
+        detected.push(...triResults);
       }
     } catch (e) {
       console.error("[scanner] detectTriangular error:", e);
@@ -191,11 +194,12 @@ export async function scanMarkets(
     for (const raw of detected) {
       try {
         // Déterminer si l'opportunité est "actionnable" ou juste "informatif"
-        // - Actionnable: spread >= minSpreadPercent ET gain >= minEstimatedGain ET risk <= maxRiskLevel
-        // - Informatif: stocké pour visibilité, mais le robot l'ignore (spread négatif, trop faible, etc.)
+        // Pour les opportunités triangulaires, le seuil est plus bas (0.01% au lieu de minSpreadPercent)
+        // car les spreads triangulaires sont naturellement plus petits
+        const effectiveMinSpread = raw.type === "triangular" ? 0.01 : config.minSpreadPercent;
         const isActionnable =
-          raw.spreadPercent >= config.minSpreadPercent &&
-          raw.estimatedGain >= config.minEstimatedGain &&
+          raw.spreadPercent >= effectiveMinSpread &&
+          raw.estimatedGain >= (raw.type === "triangular" ? 1 : config.minEstimatedGain) &&
           RISK_RANK[raw.riskLevel] <= maxRiskRank;
 
         // En dry-run, on stocke TOUTES les opportunités (même négatives) pour visibilité
