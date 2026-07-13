@@ -286,8 +286,10 @@ function typeLabel(type: string): string {
   return TYPE_LABELS[type] ?? type;
 }
 
-function formatRelativeFromNow(iso: string): string {
+function formatRelativeFromNow(iso: string | undefined | null): string {
+  if (!iso) return "récemment";
   const diff = Date.now() - new Date(iso).getTime();
+  if (isNaN(diff)) return "récemment";
   if (diff < 0) return "à l'instant";
   if (diff < 30_000) return "il y a quelques secondes";
   const min = Math.floor(diff / 60_000);

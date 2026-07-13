@@ -22,7 +22,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const result = await scanMarkets(trigger);
 
-    return NextResponse.json({ ok: true, result });
+    return NextResponse.json({
+      ok: true,
+      ...result,
+      scannedAt: new Date().toISOString(),
+    });
   } catch (err) {
     console.error("[admin/scanner/scan] error:", err);
     return NextResponse.json(

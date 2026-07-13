@@ -19,6 +19,7 @@ const VALID_STATUSES = new Set([
   "approved",
   "rejected",
   "expired",
+  "info_only",
 ]);
 const VALID_LEVELS = new Set(["full_auto", "semi_auto", "manual"]);
 const VALID_RISKS = new Set(["low", "medium", "high"]);
