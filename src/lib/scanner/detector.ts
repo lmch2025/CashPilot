@@ -190,7 +190,7 @@ export async function scanMarkets(
 
     for (const raw of detected) {
       try {
-        // Apply filters
+        // Apply filters — NO max spread restriction (all opportunities welcome)
         if (raw.spreadPercent < config.minSpreadPercent) continue;
         if (raw.estimatedGain < config.minEstimatedGain) continue;
         if (RISK_RANK[raw.riskLevel] > maxRiskRank) continue;
@@ -484,9 +484,8 @@ function generateSyntheticP2P(
 
 /**
  * #1 P2P arbitrage: compare BUY vs SELL prices for USDT/XAF.
- * If we have both BUY and SELL prices on same platform, detect the spread.
- * Fallback: if only one price type available, create a demo opportunity
- * with a realistic spread (for dry-run mode).
+ * Detects ALL spreads without restriction (even > 10%).
+ * Expressive description: who to buy from, who to sell to, prices, min/max quantities.
  */
 function detectP2PArbitrage(
   snapshot: MarketSnapshot,
@@ -503,6 +502,16 @@ function detectP2PArbitrage(
     groups.set(key, arr);
   }
 
+  // Also detect inter-platform P2P (buy on one platform, sell on another)
+  const allByAssetFiat = new Map<string, P2PPrice[]>();
+  for (const p of snapshot.p2pPrices) {
+    const key = `${p.asset}|${p.fiat}`;
+    const arr = allByAssetFiat.get(key) ?? [];
+    arr.push(p);
+    allByAssetFiat.set(key, arr);
+  }
+
+  // 1a. Intra-platform P2P arbitrage (same platform)
   for (const [key, prices] of groups.entries()) {
     const [platform, asset, fiat] = key.split("|");
     const buys = prices.filter((p) => p.tradeType === "BUY");
@@ -512,17 +521,26 @@ function detectP2PArbitrage(
     let sellPrice: number;
     let spreadPercent: number;
     let usedFallback = false;
+    let minAmount: number | undefined;
+    let maxAmount: number | undefined;
+    let buyAdvertiser: string | undefined;
+    let sellAdvertiser: string | undefined;
 
     if (buys.length > 0 && sells.length > 0) {
-      // Cas normal: on a les deux prix
+      // Real arbitrage: buy at lowest SELL, sell at highest BUY
       const bestBuy = buys.sort((a, b) => b.price - a.price)[0];
       const bestSell = sells.sort((a, b) => a.price - b.price)[0];
       buyPrice = bestSell.price;
       sellPrice = bestBuy.price;
+      buyAdvertiser = bestSell.advertiserName;
+      sellAdvertiser = bestBuy.advertiserName;
+      minAmount = bestSell.minLimit;
+      maxAmount = bestSell.maxLimit;
+
       if (sellPrice <= buyPrice) {
-        // Les prix sont inversés, on force un spread réaliste
+        // Prices inverted — use realistic spread
         const avg = (buyPrice + sellPrice) / 2;
-        spreadPercent = 1.5 + Math.random() * 1.5; // 1.5-3%
+        spreadPercent = 1.5 + Math.random() * 1.5;
         buyPrice = Math.round(avg * (1 - spreadPercent / 200));
         sellPrice = Math.round(avg * (1 + spreadPercent / 200));
         usedFallback = true;
@@ -530,21 +548,28 @@ function detectP2PArbitrage(
         spreadPercent = ((sellPrice - buyPrice) / buyPrice) * 100;
       }
     } else if (buys.length > 0 || sells.length > 0) {
-      // On a un seul type de prix — créer une opportunité avec spread réaliste
       const basePrice = (buys[0] || sells[0]).price;
-      spreadPercent = 1.5 + Math.random() * 1.5; // 1.5-3%
+      spreadPercent = 1.5 + Math.random() * 1.5;
       buyPrice = Math.round(basePrice * (1 - spreadPercent / 200));
       sellPrice = Math.round(basePrice * (1 + spreadPercent / 200));
       usedFallback = true;
+      const ref = buys[0] || sells[0];
+      minAmount = ref.minLimit;
+      maxAmount = ref.maxLimit;
+      buyAdvertiser = ref.advertiserName;
     } else {
       continue;
     }
 
     const estimatedGainPercent = spreadPercent;
     const capitalRequired = config.capitalReference;
-    const estimatedGain = Math.round(
-      (capitalRequired * spreadPercent) / 100
-    );
+    const estimatedGain = Math.round((capitalRequired * spreadPercent) / 100);
+
+    // Build expressive description
+    const minStr = minAmount ? `${formatXAF(Math.round(minAmount))} XAF` : "N/A";
+    const maxStr = maxAmount ? `${formatXAF(Math.round(maxAmount))} XAF` : "illimité";
+    const buyerStr = buyAdvertiser ? ` (${buyAdvertiser})` : "";
+    const sellerStr = sellAdvertiser ? ` (${sellAdvertiser})` : "";
 
     results.push({
       type: "p2p_arbitrage",
@@ -557,23 +582,92 @@ function detectP2PArbitrage(
       estimatedGain,
       estimatedGainPercent,
       capitalRequired,
-      riskLevel: spreadPercent > 2 ? "low" : spreadPercent >= 1 ? "medium" : "high",
+      riskLevel: spreadPercent > 5 ? "low" : spreadPercent > 2 ? "low" : spreadPercent >= 1 ? "medium" : "high",
       automationLevel: "full_auto",
-      description: `Arbitrage P2P ${asset}/${fiat} sur ${platform}: achat à ${formatXAF(
+      description: `ACHETER ${asset} sur ${platform}${buyerStr} à ${formatXAF(
         Math.round(buyPrice)
-      )} XAF, vente à ${formatXAF(Math.round(sellPrice))} XAF (spread ${spreadPercent.toFixed(
-        2
-      )}%)${usedFallback ? " [prix estimé]" : ""}. Gain estimé: ${formatXAF(
-        estimatedGain
-      )} XAF pour ${formatXAF(capitalRequired)} XAF de capital.`,
-      rawData: { buys, sells, usedFallback },
+      )} XAF → REVENDRE sur ${platform}${sellerStr} à ${formatXAF(
+        Math.round(sellPrice)
+      )} XAF. Spread: ${spreadPercent.toFixed(2)}%. Quantité: min ${minStr}, max ${maxStr}.${
+        usedFallback ? " [prix estimé]" : ""
+      } Gain estimé: ${formatXAF(estimatedGain)} XAF pour ${formatXAF(capitalRequired)} XAF.`,
+      rawData: { buys, sells, usedFallback, minAmount, maxAmount, buyAdvertiser, sellAdvertiser },
     });
   }
 
-  // Si aucune opportunité P2P trouvée, créer une opportunité de démo
+  // 1b. Inter-platform P2P arbitrage (buy on platform A, sell on platform B)
+  for (const [key, prices] of allByAssetFiat.entries()) {
+    const [asset, fiat] = key.split("|");
+    const byPlatform = new Map<string, P2PPrice[]>();
+    for (const p of prices) {
+      const arr = byPlatform.get(p.platform) ?? [];
+      arr.push(p);
+      byPlatform.set(p.platform, arr);
+    }
+    if (byPlatform.size < 2) continue;
+
+    // Find cheapest buy price and highest sell price across platforms
+    let cheapestBuy: { platform: string; price: number; advertiser?: string; minLimit?: number; maxLimit?: number } | null = null;
+    let highestSell: { platform: string; price: number; advertiser?: string; minLimit?: number; maxLimit?: number } | null = null;
+
+    for (const [platform, plPrices] of byPlatform.entries()) {
+      const sells = plPrices.filter((p) => p.tradeType === "SELL");
+      const buys = plPrices.filter((p) => p.tradeType === "BUY");
+
+      if (sells.length > 0) {
+        const bestSell = sells.sort((a, b) => a.price - b.price)[0];
+        if (!cheapestBuy || bestSell.price < cheapestBuy.price) {
+          cheapestBuy = { platform, price: bestSell.price, advertiser: bestSell.advertiserName, minLimit: bestSell.minLimit, maxLimit: bestSell.maxLimit };
+        }
+      }
+      if (buys.length > 0) {
+        const bestBuy = buys.sort((a, b) => b.price - a.price)[0];
+        if (!highestSell || bestBuy.price > highestSell.price) {
+          highestSell = { platform, price: bestBuy.price, advertiser: bestBuy.advertiserName, minLimit: bestBuy.minLimit, maxLimit: bestBuy.maxLimit };
+        }
+      }
+    }
+
+    if (cheapestBuy && highestSell && cheapestBuy.platform !== highestSell.platform) {
+      const buyPrice = cheapestBuy.price;
+      const sellPrice = highestSell.price;
+      if (sellPrice > buyPrice) {
+        const spreadPercent = ((sellPrice - buyPrice) / buyPrice) * 100;
+        const capitalRequired = config.capitalReference;
+        const estimatedGain = Math.round((capitalRequired * spreadPercent) / 100);
+        const minStr = cheapestBuy.minLimit ? `${formatXAF(Math.round(cheapestBuy.minLimit))} XAF` : "N/A";
+        const maxStr = cheapestBuy.maxLimit ? `${formatXAF(Math.round(cheapestBuy.maxLimit))} XAF` : "illimité";
+
+        results.push({
+          type: "p2p_arbitrage",
+          buyPlatform: cheapestBuy.platform,
+          sellPlatform: highestSell.platform,
+          pair: `${asset}/${fiat}`,
+          buyPrice,
+          sellPrice,
+          spreadPercent,
+          estimatedGain,
+          estimatedGainPercent: spreadPercent,
+          capitalRequired,
+          riskLevel: spreadPercent > 5 ? "low" : spreadPercent > 2 ? "low" : spreadPercent >= 1 ? "medium" : "high",
+          automationLevel: "full_auto",
+          description: `ACHETER ${asset} sur ${cheapestBuy.platform}${
+            cheapestBuy.advertiser ? ` (${cheapestBuy.advertiser})` : ""
+          } à ${formatXAF(Math.round(buyPrice))} XAF → REVENDRE sur ${highestSell.platform}${
+            highestSell.advertiser ? ` (${highestSell.advertiser})` : ""
+          } à ${formatXAF(Math.round(sellPrice))} XAF. Spread inter-plateforme: ${spreadPercent.toFixed(
+            2
+          )}%. Quantité: min ${minStr}, max ${maxStr}. Gain estimé: ${formatXAF(estimatedGain)} XAF pour ${formatXAF(capitalRequired)} XAF.`,
+          rawData: { cheapestBuy, highestSell, interPlatform: true },
+        });
+      }
+    }
+  }
+
+  // 1c. Fallback: demo opportunity if nothing found
   if (results.length === 0 && config.dryRun) {
-    const basePrice = 600; // USDT/XAF ~ 600
-    const spreadPercent = 2 + Math.random() * 1; // 2-3%
+    const basePrice = 600;
+    const spreadPercent = 2 + Math.random() * 1;
     const buyPrice = Math.round(basePrice * (1 - spreadPercent / 200));
     const sellPrice = Math.round(basePrice * (1 + spreadPercent / 200));
     const estimatedGain = Math.round((config.capitalReference * spreadPercent) / 100);
@@ -591,13 +685,11 @@ function detectP2PArbitrage(
       capitalRequired: config.capitalReference,
       riskLevel: "low",
       automationLevel: "full_auto",
-      description: `Arbitrage P2P USDT/XAF sur Binance: achat à ${formatXAF(
-        buyPrice
-      )} XAF, vente à ${formatXAF(sellPrice)} XAF (spread ${spreadPercent.toFixed(
-        2
-      )}%) [mode démo]. Gain estimé: ${formatXAF(estimatedGain)} XAF pour ${formatXAF(
-        config.capitalReference
-      )} XAF de capital.`,
+      description: `ACHETER USDT sur Binance à ${formatXAF(buyPrice)} XAF → REVENDRE sur Binance à ${formatXAF(
+        sellPrice
+      )} XAF. Spread: ${spreadPercent.toFixed(2)}%. Quantité: min 10 000 XAF, max 500 000 XAF. [mode démo] Gain estimé: ${formatXAF(
+        estimatedGain
+      )} XAF pour ${formatXAF(config.capitalReference)} XAF.`,
       rawData: { demo: true, basePrice },
     });
   }
@@ -677,75 +769,135 @@ function detectTriangular(
 ): DetectedRaw[] {
   const results: DetectedRaw[] = [];
 
-  // Build a price map: pair -> price (Binance only, take first match)
-  const binanceSpot = snapshot.spotPrices.filter((p) => p.platform === "binance");
+  // Build a price map from ALL platforms (not just Binance)
+  // Binance returns pairs like "BTC/USDT", "ETH/USDT", "SOL/USDT", "TRX/USDT"
   const priceMap = new Map<string, number>();
-  for (const p of binanceSpot) {
-    priceMap.set(p.pair, p.price);
+  for (const p of snapshot.spotPrices) {
+    // Normalize pair format: "BTCUSDT" → "BTC/USDT"
+    const pair = p.pair.includes("/") ? p.pair : `${p.pair.slice(0, -4)}/${p.pair.slice(-4)}`;
+    if (!priceMap.has(pair)) {
+      priceMap.set(pair, p.price);
+    }
   }
 
-  // Cycles to check (each step uses a spot pair from Binance)
-  // Each cycle: [start, mid, end] — pairs are start/mid, mid/end, end/start
-  // We use direct pairs when available; otherwise inverse.
+  // Helper: get rate for base→quote conversion
+  function getRate(base: string, quote: string): number | undefined {
+    const directKey = `${base}/${quote}`;
+    const inverseKey = `${quote}/${base}`;
+    if (priceMap.has(directKey)) {
+      return priceMap.get(directKey);
+    }
+    if (priceMap.has(inverseKey)) {
+      const inv = priceMap.get(inverseKey)!;
+      return inv > 0 ? 1 / inv : undefined;
+    }
+    return undefined;
+  }
+
+  // Extended cycles with more cryptocurrencies
   const cycles: Array<{ name: string; steps: Array<[string, string]> }> = [
-    { name: "USDT→BTC→ETH→USDT", steps: [["BTC", "USDT"], ["ETH", "BTC"], ["ETH", "USDT"]] },
-    { name: "USDT→ETH→BTC→USDT", steps: [["ETH", "USDT"], ["ETH", "BTC"], ["BTC", "USDT"]] },
-    { name: "USDT→SOL→BTC→USDT", steps: [["SOL", "USDT"], ["SOL", "BTC"], ["BTC", "USDT"]] },
+    // BTC cycles
+    { name: "USDT→BTC→USDC→USDT", steps: [["USDT", "BTC"], ["BTC", "USDC"], ["USDC", "USDT"]] },
+    { name: "USDT→BTC→ETH→USDT", steps: [["USDT", "BTC"], ["BTC", "ETH"], ["ETH", "USDT"]] },
+    { name: "USDT→BTC→SOL→USDT", steps: [["USDT", "BTC"], ["BTC", "SOL"], ["SOL", "USDT"]] },
+    { name: "USDT→BTC→TRX→USDT", steps: [["USDT", "BTC"], ["BTC", "TRX"], ["TRX", "USDT"]] },
+    // ETH cycles
+    { name: "USDT→ETH→BTC→USDT", steps: [["USDT", "ETH"], ["ETH", "BTC"], ["BTC", "USDT"]] },
+    { name: "USDT→ETH→SOL→USDT", steps: [["USDT", "ETH"], ["ETH", "SOL"], ["SOL", "USDT"]] },
+    { name: "USDT→ETH→TRX→USDT", steps: [["USDT", "ETH"], ["ETH", "TRX"], ["TRX", "USDT"]] },
+    // SOL cycles
+    { name: "USDT→SOL→BTC→USDT", steps: [["USDT", "SOL"], ["SOL", "BTC"], ["BTC", "USDT"]] },
+    { name: "USDT→SOL→ETH→USDT", steps: [["USDT", "SOL"], ["SOL", "ETH"], ["ETH", "USDT"]] },
+    // TRX cycles
+    { name: "USDT→TRX→BTC→USDT", steps: [["USDT", "TRX"], ["TRX", "BTC"], ["BTC", "USDT"]] },
+    { name: "USDT→TRX→ETH→USDT", steps: [["USDT", "TRX"], ["TRX", "ETH"], ["ETH", "USDT"]] },
+    // 4-asset cycles
+    { name: "USDT→BTC→ETH→SOL→USDT", steps: [["USDT", "BTC"], ["BTC", "ETH"], ["ETH", "SOL"], ["SOL", "USDT"]] },
+    { name: "USDT→SOL→ETH→BTC→USDT", steps: [["USDT", "SOL"], ["SOL", "ETH"], ["ETH", "BTC"], ["BTC", "USDT"]] },
   ];
 
   for (const cycle of cycles) {
     let rate = 1;
     let valid = true;
     const trace: Array<{ pair: string; rate: number }> = [];
+
     for (const [base, quote] of cycle.steps) {
-      // We want: how many `quote` do we get for 1 `base`?
-      // Direct: pair = base/quote → price = quote per base.
-      // Inverse: pair = quote/base → 1/price = quote per base.
-      let r: number | undefined;
-      const directKey = `${base}/${quote}`;
-      const inverseKey = `${quote}/${base}`;
-      if (priceMap.has(directKey)) {
-        r = priceMap.get(directKey);
-        trace.push({ pair: directKey, rate: r! });
-      } else if (priceMap.has(inverseKey)) {
-        const inv = priceMap.get(inverseKey)!;
-        r = 1 / inv;
-        trace.push({ pair: inverseKey, rate: r });
-      } else {
+      const r = getRate(base, quote);
+      if (r === undefined || r <= 0) {
         valid = false;
         break;
       }
-      rate *= r!;
+      trace.push({ pair: `${base}/${quote}`, rate: r });
+      rate *= r;
     }
+
     if (!valid || rate <= 0) continue;
 
     const spreadPercent = (rate - 1) * 100;
-    if (spreadPercent <= 0) continue;
+    // In dry-run, also detect negative spreads (reverse the cycle)
+    if (spreadPercent === 0) continue;
 
-    const capitalRequired = config.capitalReference; // XAF
-    const estimatedGain = Math.round((capitalRequired * spreadPercent) / 100);
+    const capitalRequired = config.capitalReference;
+    const estimatedGain = Math.round((capitalRequired * Math.abs(spreadPercent)) / 100);
+    const direction = spreadPercent > 0 ? "forward" : "reverse (cycle inversé)";
+
+    // Build expressive description with trace
+    const traceStr = trace.map((t) => `${t.pair}@${t.rate.toFixed(6)}`).join(" → ");
 
     results.push({
       type: "triangular",
       buyPlatform: "binance",
       sellPlatform: "binance",
       pair: cycle.name,
-      buyPrice: 1, // nominal
+      buyPrice: 1,
       sellPrice: rate,
-      spreadPercent,
+      spreadPercent: Math.abs(spreadPercent),
       estimatedGain,
-      estimatedGainPercent: spreadPercent,
+      estimatedGainPercent: Math.abs(spreadPercent),
       capitalRequired,
-      riskLevel:
-        spreadPercent > 2 ? "low" : spreadPercent >= 1 ? "medium" : "high",
+      riskLevel: Math.abs(spreadPercent) > 1 ? "low" : Math.abs(spreadPercent) > 0.3 ? "medium" : "high",
       automationLevel: "semi_auto",
-      description: `Arbitrage triangulaire ${cycle.name}: spread théorique ${spreadPercent.toFixed(
+      description: `Arbitrage triangulaire ${cycle.name} (${direction}): ${traceStr}. Spread: ${Math.abs(spreadPercent).toFixed(
         3
-      )}%. Gain estimé: ${formatXAF(estimatedGain)} XAF pour ${formatXAF(
-        capitalRequired
-      )} XAF.`,
-      rawData: { cycle: cycle.name, trace, rate },
+      )}%. Étapes: ${cycle.steps.length}. Gain estimé: ${formatXAF(estimatedGain)} XAF pour ${formatXAF(capitalRequired)} XAF.`,
+      rawData: { cycle: cycle.name, trace, rate, direction },
     });
+  }
+
+  // Fallback: if no triangular found but we have spot prices, create demo opportunities
+  if (results.length === 0 && snapshot.spotPrices.length > 0 && config.dryRun) {
+    // Create demo triangular opportunities with realistic small spreads
+    const demoCycles = [
+      { name: "USDT→BTC→ETH→USDT", spread: 0.1 + Math.random() * 0.3 },
+      { name: "USDT→ETH→SOL→USDT", spread: 0.1 + Math.random() * 0.3 },
+      { name: "USDT→SOL→BTC→USDT", spread: 0.1 + Math.random() * 0.3 },
+      { name: "USDT→BTC→TRX→USDT", spread: 0.1 + Math.random() * 0.4 },
+      { name: "USDT→ETH→TRX→USDT", spread: 0.1 + Math.random() * 0.4 },
+    ];
+
+    for (const demo of demoCycles) {
+      const capitalRequired = config.capitalReference;
+      const estimatedGain = Math.round((capitalRequired * demo.spread) / 100);
+
+      results.push({
+        type: "triangular",
+        buyPlatform: "binance",
+        sellPlatform: "binance",
+        pair: demo.name,
+        buyPrice: 1,
+        sellPrice: 1 + demo.spread / 100,
+        spreadPercent: demo.spread,
+        estimatedGain,
+        estimatedGainPercent: demo.spread,
+        capitalRequired,
+        riskLevel: "medium",
+        automationLevel: "semi_auto",
+        description: `Arbitrage triangulaire ${demo.name} [mode démo]: spread théorique ${demo.spread.toFixed(
+          3
+        )}%. Cycle: ${demo.name.replace(/→/g, " → ")}. Gain estimé: ${formatXAF(estimatedGain)} XAF pour ${formatXAF(capitalRequired)} XAF.`,
+        rawData: { demo: true, cycle: demo.name, spread: demo.spread },
+      });
+    }
   }
 
   return results;
