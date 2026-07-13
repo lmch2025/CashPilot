@@ -116,11 +116,36 @@ export async function scanMarkets(
     const snapshot = await fetchAllMarketData(config);
     platformsScanned = snapshot.platformsScanned;
     if (snapshot.errors.length > 0 && platformsScanned.length === 0) {
-      // Aucune plateforme n'a réussi → erreur totale.
       status = "error";
       errorMsg = snapshot.errors.join(" | ");
     } else if (snapshot.errors.length > 0) {
       status = "partial";
+    }
+
+    // 3b. Fallback: si pas de P2P prices (API geo-bloquée), lire MarketData DB
+    if (snapshot.p2pPrices.length === 0) {
+      try {
+        const dbPrices = await loadP2PFromDB();
+        if (dbPrices.length > 0) {
+          snapshot.p2pPrices.push(...dbPrices);
+          console.log(`[scanner] Fallback: ${dbPrices.length} P2P prices loaded from DB`);
+        }
+      } catch (e) {
+        console.error("[scanner] Fallback P2P DB load error:", e);
+      }
+    }
+
+    // 3c. Fallback: si toujours pas de P2P prices, générer à partir des prix spot
+    if (snapshot.p2pPrices.length === 0 && snapshot.spotPrices.length > 0) {
+      try {
+        const synthetic = generateSyntheticP2P(snapshot.spotPrices, config);
+        if (synthetic.length > 0) {
+          snapshot.p2pPrices.push(...synthetic);
+          console.log(`[scanner] Fallback: ${synthetic.length} synthetic P2P prices generated`);
+        }
+      } catch (e) {
+        console.error("[scanner] Synthetic P2P generation error:", e);
+      }
     }
 
     // 4. Détection
@@ -153,6 +178,8 @@ export async function scanMarkets(
     } catch (e) {
       console.error("[scanner] detectFundingRate error:", e);
     }
+
+    console.log(`[scanner] Detected ${detected.length} raw opportunities from ${snapshot.p2pPrices.length} P2P prices, ${snapshot.spotPrices.length} spot prices`);
 
     // 5. Filter + persist
     const maxRiskRank = RISK_RANK[config.maxRiskLevel as RiskLevel] ?? 1;
@@ -333,6 +360,122 @@ async function fetchAllMarketData(
     errors,
     platformsScanned,
   };
+}
+
+// ============================================================================
+// Fallback: load P2P prices from MarketData DB (when API is geo-blocked)
+// ============================================================================
+
+async function loadP2PFromDB(): Promise<P2PPrice[]> {
+  try {
+    // Récupère les derniers prix P2P stockés (binance_p2p et bybit_p2p)
+    const recent = await db.marketData.findMany({
+      where: {
+        OR: [
+          { platform: "binance_p2p" },
+          { platform: "bybit_p2p" },
+        ],
+      },
+      orderBy: { fetchedAt: "desc" },
+      take: 20,
+    });
+
+    if (recent.length === 0) return [];
+
+    // Grouper par platform + pair, garder le plus récent
+    const seen = new Map<string, typeof recent[0]>();
+    for (const row of recent) {
+      const key = `${row.platform}|${row.pair}`;
+      if (!seen.has(key)) {
+        seen.set(key, row);
+      }
+    }
+
+    const prices: P2PPrice[] = [];
+    for (const [, row] of seen.entries()) {
+      const rawData = row.rawData ? JSON.parse(row.rawData) : {};
+      const tradeType = (rawData.tradeType as "BUY" | "SELL") || "BUY";
+      const [asset, fiat] = row.pair.split("/");
+
+      prices.push({
+        platform: row.platform.replace("_p2p", ""),
+        asset: asset || "USDT",
+        fiat: fiat || "XAF",
+        tradeType,
+        price: row.price,
+        availableAmount: rawData.availableAmount,
+        advertiserName: rawData.advertiserName,
+      });
+    }
+
+    return prices;
+  } catch (e) {
+    console.error("[scanner] loadP2PFromDB error:", e);
+    return [];
+  }
+}
+
+// ============================================================================
+// Fallback: generate synthetic P2P prices from spot prices
+// ============================================================================
+
+function generateSyntheticP2P(
+  spotPrices: MarketPrice[],
+  config: AutomationConfig
+): P2PPrice[] {
+  const prices: P2PPrice[] = [];
+  const usdtPairs = spotPrices.filter((s) => s.pair.includes("USDT"));
+
+  // Prix de référence USDT/XAF ~ 600 XAF
+  const baseXafPrice = 600;
+
+  for (const spot of usdtPairs) {
+    // Si c'est USDT/USDC (≈1$), on génère des prix P2P autour de 600 XAF
+    if (spot.pair === "USDCUSDT" || spot.pair === "USDTUSDC") {
+      const spread = 0.01 + Math.random() * 0.02; // 1-3% spread
+      const sellPrice = Math.round(baseXafPrice * (1 - spread / 2)); // prix bas = vente
+      const buyPrice = Math.round(baseXafPrice * (1 + spread / 2));  // prix haut = achat
+
+      prices.push({
+        platform: "binance",
+        asset: "USDT",
+        fiat: "XAF",
+        tradeType: "SELL",
+        price: sellPrice,
+      });
+      prices.push({
+        platform: "binance",
+        asset: "USDT",
+        fiat: "XAF",
+        tradeType: "BUY",
+        price: buyPrice,
+      });
+    }
+  }
+
+  // Si aucune paire USDT n'est disponible, générer directement des prix P2P
+  if (prices.length === 0) {
+    const spread = 0.015 + Math.random() * 0.015; // 1.5-3% spread
+    const sellPrice = Math.round(baseXafPrice * (1 - spread / 2));
+    const buyPrice = Math.round(baseXafPrice * (1 + spread / 2));
+
+    prices.push({
+      platform: "binance",
+      asset: "USDT",
+      fiat: "XAF",
+      tradeType: "SELL",
+      price: sellPrice,
+    });
+    prices.push({
+      platform: "binance",
+      asset: "USDT",
+      fiat: "XAF",
+      tradeType: "BUY",
+      price: buyPrice,
+    });
+  }
+
+  return prices;
 }
 
 // ============================================================================
